@@ -24,11 +24,12 @@ trait AnalyticsKafkaConsumer:
 
 final class LiveAnalyticsKafkaConsumer(
     logRepo: LogRepository,
+    consumptionRepo: ConsumptionRepository,
     kafkaCfg: KafkaConfig
 ) extends AnalyticsKafkaConsumer:
 
   def start: Task[Unit] =
-    startAuditLogConsumer
+    startAuditLogConsumer.zipParLeft(startConsumptionsConsumer)
 
   // ── audit.log consumer ────────────────────────────────────────────────
 
@@ -75,7 +76,49 @@ final class LiveAnalyticsKafkaConsumer(
       }
     }
 
+  // ── consumptions.ingest consumer ─────────────────────────────────────────
+
+  private def startConsumptionsConsumer: Task[Unit] =
+    val settings = ConsumerSettings(kafkaCfg.bootstrapServers)
+      .withGroupId("ev-analytics-consumptions")
+      .withProperty("auto.offset.reset", "earliest")
+
+    ZIO.scoped {
+      Consumer.make(settings).flatMap { consumer =>
+        consumer
+          .plainStream(Subscription.topics(Topics.consumptionsIngest), Serde.string, Serde.string)
+          .mapZIO { record =>
+            val process = io.circe.parser.decode[ConsumptionIngestPayload](record.value) match
+              case Left(err) =>
+                ZIO.logWarning(s"[Analytics] Failed to decode ConsumptionIngestPayload: $err")
+              case Right(payload) =>
+                val reading = ConsumptionReading(
+                  tenantId = payload.tenantId,
+                  chargingStationId = payload.chargingStationId,
+                  connectorId = payload.connectorId,
+                  siteAreaId = payload.siteAreaId,
+                  siteId = payload.siteId,
+                  userId = payload.userId,
+                  transactionId = payload.transactionId,
+                  time = Instant.ofEpochMilli(payload.time),
+                  instantWatts = payload.instantWatts,
+                  cumulatedKwh = payload.cumulatedKwh
+                )
+                consumptionRepo.insert(reading)
+                  .tapError(err =>
+                    ZIO.logError(s"[Analytics] Failed to insert consumption reading: ${err.getMessage}")
+                  )
+                  .ignore
+
+            process.as(record.offset)
+          }
+          .aggregateAsync(Consumer.offsetBatches)
+          .mapZIO(_.commit)
+          .runDrain
+      }
+    }
+
 object LiveAnalyticsKafkaConsumer:
 
-  val live: ZLayer[LogRepository & KafkaConfig, Nothing, AnalyticsKafkaConsumer] =
-    ZLayer.fromFunction(new LiveAnalyticsKafkaConsumer(_, _))
+  val live: ZLayer[LogRepository & ConsumptionRepository & KafkaConfig, Nothing, AnalyticsKafkaConsumer] =
+    ZLayer.fromFunction(new LiveAnalyticsKafkaConsumer(_, _, _))

@@ -426,7 +426,7 @@ final class OcppEventProcessor(
       "instantWatts"      -> Json.fromDouble(watts).getOrElse(Json.fromInt(0)),
       "cumulatedKwh"      -> Json.fromDouble(kwh).getOrElse(Json.fromInt(0))
     )
-    producer.publish(Topics.auditLog, stationId.value, event)
+    producer.publish(Topics.consumptionsIngest, stationId.value, event)
 
   private def publishAuditLog(
       tenantId: TenantId,

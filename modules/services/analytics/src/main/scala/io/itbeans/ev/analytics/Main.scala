@@ -58,7 +58,7 @@ object Main extends ZIOAppDefault:
         s"ev-analytics starting: http=:${cfg.httpPort} " +
           s"logRetentionDays=${cfg.logRetentionDays}"
       )
-      // Start Kafka consumer (audit.log → TimescaleDB)
+      // Start Kafka consumers (audit.log + consumptions.ingest → TimescaleDB)
       _ <- consumer.start
         .tapError(err => ZIO.logError(s"Analytics Kafka consumer error: ${err.getMessage}"))
         .ignore

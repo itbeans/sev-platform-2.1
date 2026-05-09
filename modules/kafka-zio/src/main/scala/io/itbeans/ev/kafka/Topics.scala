@@ -47,5 +47,8 @@ object Topics:
   /** Audit log events from all services → Analytics service. */
   val auditLog: String = "audit.log"
 
+  /** Consumption readings from MeterValues → ev-analytics TimescaleDB hypertable. */
+  val consumptionsIngest: String = "consumptions.ingest"
+
   /** Dead letter queue — messages that failed processing after retries. */
   val deadLetterQueue: String = "dlq.failed-messages"

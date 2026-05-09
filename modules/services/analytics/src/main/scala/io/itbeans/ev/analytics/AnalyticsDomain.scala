@@ -91,6 +91,29 @@ object LogsResponse:
   given Encoder[LogsResponse] = deriveEncoder
   given Decoder[LogsResponse] = deriveDecoder
 
+/**
+ * Payload published by ev-ocpp-processor to the `consumptions.ingest` Kafka topic
+ * on every MeterValues / TransactionEvent.Updated message.
+ * `time` is epoch-milliseconds; `siteAreaId` / `siteId` / `userId` are enriched
+ * if available in the transaction document.
+ */
+case class ConsumptionIngestPayload(
+    tenantId: String,
+    chargingStationId: String,
+    connectorId: Int,
+    transactionId: Option[Long],
+    siteAreaId: Option[String],
+    siteId: Option[String],
+    userId: Option[String],
+    time: Long,
+    instantWatts: Double,
+    cumulatedKwh: Double
+)
+
+object ConsumptionIngestPayload:
+  given Encoder[ConsumptionIngestPayload] = deriveEncoder
+  given Decoder[ConsumptionIngestPayload] = deriveDecoder
+
 /** Payload consumed from the Kafka `audit.log` topic. */
 case class AuditLogPayload(
     tenantId: String,
