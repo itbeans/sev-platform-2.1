@@ -3,6 +3,7 @@ package io.itbeans.ev.ocppprocessor
 import io.grpc.ManagedChannelBuilder
 import io.itbeans.ev.auth.grpc.auth_service._
 import io.itbeans.ev.ocpp.grpc.ocpp_gateway._
+import io.itbeans.ev.pricing.grpc.pricing_service._
 import zio._
 
 // ---------------------------------------------------------------------------
@@ -112,4 +113,95 @@ object ProcessorGatewayClient:
           )
         )(ch => ZIO.attempt(ch.shutdown()).ignore)
       yield new LiveProcessorGatewayClient(OcppGatewayServiceGrpc.stub(channel))
+    }.orDie
+
+// ── Pricing client ────────────────────────────────────────────────────────────
+
+trait ProcessorPricingClient:
+  def resolvePricing(tenantId: String, stationId: String, connectorId: String, userId: String, startTimestampMs: Long): Task[ResolvePricingResponse]
+  def priceConsumption(tenantId: String, txId: String, pricingModelJson: String, consumptionWh: Double, instantWatts: Double, intervalStartMs: Long, intervalEndMs: Long): Task[PriceConsumptionResponse]
+  def finalisePrice(tenantId: String, txId: String, pricingModelJson: String, totalConsumptionWh: Double, startTimestampMs: Long, endTimestampMs: Long): Task[FinalisePriceResponse]
+
+final class LiveProcessorPricingClient(stub: PricingServiceGrpc.PricingServiceStub)
+    extends ProcessorPricingClient:
+
+  def resolvePricing(
+      tenantId: String,
+      stationId: String,
+      connectorId: String,
+      userId: String,
+      startTimestampMs: Long
+  ): Task[ResolvePricingResponse] =
+    ZIO.fromFuture(implicit ec =>
+      stub.resolvePricing(
+        ResolvePricingRequest(
+          tenantId = tenantId,
+          chargingStationId = stationId,
+          connectorId = connectorId,
+          userId = userId,
+          tagId = userId,
+          startTimestamp = startTimestampMs
+        )
+      )
+    )
+
+  def priceConsumption(
+      tenantId: String,
+      txId: String,
+      pricingModelJson: String,
+      consumptionWh: Double,
+      instantWatts: Double,
+      intervalStartMs: Long,
+      intervalEndMs: Long
+  ): Task[PriceConsumptionResponse] =
+    ZIO.fromFuture(implicit ec =>
+      stub.priceConsumption(
+        PriceConsumptionRequest(
+          tenantId = tenantId,
+          transactionId = txId,
+          pricingModelJson = pricingModelJson,
+          consumptionWh = consumptionWh,
+          instantWatts = instantWatts,
+          intervalStart = intervalStartMs,
+          intervalEnd = intervalEndMs
+        )
+      )
+    )
+
+  def finalisePrice(
+      tenantId: String,
+      txId: String,
+      pricingModelJson: String,
+      totalConsumptionWh: Double,
+      startTimestampMs: Long,
+      endTimestampMs: Long
+  ): Task[FinalisePriceResponse] =
+    ZIO.fromFuture(implicit ec =>
+      stub.finalisePrice(
+        FinalisePriceRequest(
+          tenantId = tenantId,
+          transactionId = txId,
+          pricingModelJson = pricingModelJson,
+          totalConsumptionWh = totalConsumptionWh,
+          startTimestamp = startTimestampMs,
+          endTimestamp = endTimestampMs
+        )
+      )
+    )
+
+object ProcessorPricingClient:
+
+  val live: ZLayer[ProcessorConfig, Nothing, ProcessorPricingClient] =
+    ZLayer.scoped {
+      for
+        cfg <- ZIO.service[ProcessorConfig]
+        channel <- ZIO.acquireRelease(
+          ZIO.attempt(
+            ManagedChannelBuilder
+              .forAddress(cfg.pricingGrpcHost, cfg.pricingGrpcPort)
+              .usePlaintext()
+              .build()
+          )
+        )(ch => ZIO.attempt(ch.shutdown()).ignore)
+      yield new LiveProcessorPricingClient(PricingServiceGrpc.stub(channel))
     }.orDie

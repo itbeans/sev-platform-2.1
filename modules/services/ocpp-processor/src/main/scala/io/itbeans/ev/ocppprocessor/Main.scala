@@ -49,6 +49,7 @@ object Main extends ZIOAppDefault:
       // gRPC clients
       ProcessorAuthClient.live,
       ProcessorGatewayClient.live,
+      ProcessorPricingClient.live,
       // Event processor
       OcppEventProcessor.live
     )
