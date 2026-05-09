@@ -257,6 +257,49 @@ object OicpChargeDetailRecord:
   given Encoder[OicpChargeDetailRecord] = deriveEncoder
   given Decoder[OicpChargeDetailRecord] = deriveDecoder
 
+// ── Connector type mapping: OCPP ConnectorType → OCPI standard ───────────
+
+/**
+ * Maps the OCPP/domain connector type to OCPI 2.1.1 standard,
+ * format, and power type strings.
+ */
+object OcpiConnectorMapping:
+
+  def toOcpi(connectorType: Option[String]): (String, String, String) =
+    connectorType.map(_.toUpperCase).getOrElse("") match
+      case t if t.contains("CCS") || t.contains("COMBO") =>
+        ("IEC_62196_T2_COMBO", "CABLE", "DC")
+      case t if t.contains("CHADEMO") || t.contains("CHAdeMO") =>
+        ("CHADEMO", "CABLE", "DC")
+      case t if t.contains("TYPE1") || t.contains("J1772") =>
+        ("IEC_62196_T1", "SOCKET", "AC_1_PHASE")
+      case t if t.contains("TYPE2") || t.contains("MENNEKES") || t.isEmpty =>
+        ("IEC_62196_T2", "SOCKET", "AC_3_PHASE")
+      case t if t.contains("GBT") || t.contains("GB_T") =>
+        ("GB_T_20234_2", "SOCKET", "AC_3_PHASE")
+      case t if t.contains("TESLA") =>
+        ("TESLA_R", "CABLE", "DC")
+      case _ =>
+        ("IEC_62196_T2", "SOCKET", "AC_3_PHASE")
+
+// ── Charging station location (read model for CDR enrichment) ─────────────
+
+/**
+ * Minimal location data fetched from the charging station + site documents
+ * and embedded into OCPI CDRs.
+ */
+case class StationLocation(
+    stationId: String,
+    connectorType: Option[String],
+    address: String,
+    city: String,
+    postalCode: String,
+    country: String,
+    latitude: String,
+    longitude: String,
+    siteName: Option[String]
+)
+
 // ── Internal transaction read model ──────────────────────────────────────
 
 /**

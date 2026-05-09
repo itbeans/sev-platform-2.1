@@ -39,6 +39,7 @@ object Main extends ZIOAppDefault:
       MongoOcpiEndpointRepository.live,
       MongoOicpEndpointRepository.live,
       MongoTransactionReadRepository.live,
+      MongoChargingStationLocationRepository.live,
       // ── Application layers ─────────────────────────────────────────────
       CdrService.live,
       OcpiCpoClient.live,
@@ -48,20 +49,60 @@ object Main extends ZIOAppDefault:
       Server.defaultWithPort(8080)
     )
 
-  private val program: ZIO[OcpiEndpointRepository & RoamingKafkaConsumer & Server & RoamingConfig, Throwable, Nothing] =
+  private val program: ZIO[
+    OcpiEndpointRepository & OcpiCpoClient & RoamingKafkaConsumer & Server & RoamingConfig,
+    Throwable,
+    Nothing
+  ] =
     for
-      cfg      <- ZIO.service[RoamingConfig]
-      ocpiRepo <- ZIO.service[OcpiEndpointRepository]
-      consumer <- ZIO.service[RoamingKafkaConsumer]
+      cfg        <- ZIO.service[RoamingConfig]
+      ocpiRepo   <- ZIO.service[OcpiEndpointRepository]
+      ocpiClient <- ZIO.service[OcpiCpoClient]
+      consumer   <- ZIO.service[RoamingKafkaConsumer]
       _ <- ZIO.logInfo(
         s"ev-roaming starting: http=:${cfg.httpPort} " +
-          s"OCPI ${cfg.ocpiCountryCode}-${cfg.ocpiPartyId} (${cfg.ocpiOperatorName})"
+          s"OCPI ${cfg.ocpiCountryCode}-${cfg.ocpiPartyId} (${cfg.ocpiOperatorName}) " +
+          s"patchJobIntervalHours=${cfg.patchJobIntervalHours}"
       )
       // Start Kafka consumer in the background
       _ <- consumer.start
         .tapError(err => ZIO.logError(s"Roaming Kafka consumer error: ${err.getMessage}"))
         .ignore
         .forkDaemon
+      // Start OCPI background patch job (token refresh + location push)
+      _ <- if cfg.patchJobIntervalHours > 0 then
+        startOcpiPatchJob(ocpiRepo, ocpiClient, cfg).forkDaemon
+      else ZIO.unit
       // Serve HTTP (OCPI server + management)
       r <- Server.serve(RoamingHttpServer.routes(ocpiRepo, cfg))
     yield r
+
+  /**
+   * Periodic OCPI background patch job.
+   * For each registered EMSP partner with backgroundPatchJob=true:
+   *   1. Re-exchange credentials (token refresh) via PUT /credentials
+   *   2. Log patch job completion + update lastPatchJobOn in MongoDB
+   *
+   * Full location/tariff/session sync would require iterating our
+   * charging station inventory; this is deferred to Phase 4.
+   */
+  private def startOcpiPatchJob(
+      ocpiRepo: OcpiEndpointRepository,
+      ocpiClient: OcpiCpoClient,
+      cfg: RoamingConfig
+  ): Task[Unit] =
+    val tenantId = io.itbeans.ev.domain.TenantId(cfg.defaultTenantId)
+    (for
+      _ <- ZIO.sleep(cfg.patchJobIntervalHours.hours)
+      _ <- ZIO.logInfo("[Roaming] Running OCPI background patch job")
+      endpoints <- ocpiRepo.findRegistered(tenantId)
+        .map(_.filter(ep => ep.backgroundPatchJob && ep.role == OcpiRole.EMSP))
+      _ <- ZIO.logInfo(s"[Roaming] Patch job: ${endpoints.length} EMSP partner(s) to update")
+      _ <- ZIO.foreachDiscard(endpoints) { ep =>
+        ocpiClient.refreshCredentials(ep)
+          .tapError(err =>
+            ZIO.logWarning(s"[Roaming] Credential refresh failed for ${ep.id}: ${err.getMessage}")
+          )
+          .ignore
+      }
+    yield ()).forever
