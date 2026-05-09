@@ -23,6 +23,7 @@ trait SmartChargingService:
 final class LiveSmartChargingService(
     repo: SmartChargingRepository,
     optimizer: SapSmartChargingClient,
+    gatewayClient: SmartChargingGatewayClient,
     cfg: SmartChargingConfig
 ) extends SmartChargingService:
 
@@ -46,11 +47,20 @@ final class LiveSmartChargingService(
             s"[SmartCharging] SAP optimizer call failed for $siteAreaId: ${err.getMessage}"
           )
         )
-      // Convert optimizer output → ChargingProfile and persist
+      // Convert optimizer output → ChargingProfile, persist, then deliver to stations
       profiles = buildProfiles(tenantId, siteAreaId, siteArea.siteId, txs, result, siteArea)
       _ <- ZIO.foreach(profiles)(repo.saveProfile)
+      _ <- ZIO.foreach(profiles) { profile =>
+        gatewayClient.deliverChargingProfile(tenantId, profile)
+          .tapError(err =>
+            ZIO.logWarning(
+              s"[SmartCharging] Failed to deliver profile to ${profile.chargingStationId}: ${err.getMessage}"
+            )
+          )
+          .ignore
+      }
       _ <- ZIO.logInfo(
-        s"[SmartCharging] Applied ${profiles.size} charging profiles for $siteAreaId"
+        s"[SmartCharging] Applied and delivered ${profiles.size} charging profiles for $siteAreaId"
       )
     yield ()
 
@@ -63,29 +73,47 @@ final class LiveSmartChargingService(
   ): OptimizerRequest =
     val voltage   = siteArea.voltage.getOrElse(cfg.defaultVoltage).toDouble
     val numPhases = siteArea.numberOfPhases.getOrElse(cfg.defaultNumberPhases)
-    // Grid fuse = site area maximum power / (voltage * phases)
     val gridFuseAmps = siteArea.maximumPower / (voltage * numPhases)
 
-    // One root fuse for the entire site area
+    // Group transactions by charging station to build per-station child fuses.
+    // Station fuse id starts at 1; car ids align with transaction index (1-based).
+    val txByStation: Map[String, List[ActiveTransactionSC]] =
+      txs.groupBy(_.chargingStationId)
+
+    // Assign a stable fuse ID to each station (deterministic by sorted station ID)
+    val stationFuseIds: Map[String, Int] =
+      txByStation.keys.toList.sorted.zipWithIndex.map { case (sid, idx) => sid -> (idx + 1) }.toMap
+
+    // Build one child OptimizerFuse per station.
+    // Amperage = sum of max connector amperage across all active transactions on that station.
+    val stationFuses: Map[String, OptimizerFuse] =
+      stationFuseIds.map { case (stationId, fuseId) =>
+        val stationTxs = txByStation(stationId)
+        val stationAmps = stationTxs.map(_.maxCurrentA).sum.max(gridFuseAmps / stationFuseIds.size)
+        stationId -> OptimizerFuse(
+          id = fuseId,
+          fusePhase1 = stationAmps,
+          fusePhase2 = stationAmps,
+          fusePhase3 = stationAmps
+        )
+      }
+
+    // Root fuse contains all station child fuses
     val rootFuse = OptimizerFuse(
       id = 0,
       fusePhase1 = gridFuseAmps,
       fusePhase2 = gridFuseAmps,
-      fusePhase3 = gridFuseAmps
+      fusePhase3 = gridFuseAmps,
+      children = stationFuses.values.toList.sortBy(_.id)
     )
 
-    val cars = txs.zipWithIndex.map { case (tx, idx) =>
-      buildCar(idx + 1, tx)
-    }
+    val cars = txs.zipWithIndex.map { case (tx, idx) => buildCar(idx + 1, tx) }
 
-    // All cars are assigned to the root fuse (id=0) since we model a flat
-    // topology with one site-area grid fuse. A full implementation would
-    // create per-station child fuses and reference their IDs here.
+    // Each car is assigned to its station's child fuse (not the root)
     val carAssignments = txs.zipWithIndex.map { case (tx, idx) =>
-      CarAssignment(carID = idx + 1, chargingStationID = 0)
+      CarAssignment(carID = idx + 1, chargingStationID = stationFuseIds(tx.chargingStationId))
     }
 
-    // Seconds elapsed in the current 15-min slot (slot = 900 seconds)
     val nowSecs            = java.lang.System.currentTimeMillis() / 1000
     val currentTimeSeconds = (nowSecs % 900).toInt
 
@@ -183,6 +211,9 @@ final class LiveSmartChargingService(
 
 object LiveSmartChargingService:
 
-  val live
-      : ZLayer[SmartChargingRepository & SapSmartChargingClient & SmartChargingConfig, Nothing, SmartChargingService] =
-    ZLayer.fromFunction(new LiveSmartChargingService(_, _, _))
+  val live: ZLayer[
+    SmartChargingRepository & SapSmartChargingClient & SmartChargingGatewayClient & SmartChargingConfig,
+    Nothing,
+    SmartChargingService
+  ] =
+    ZLayer.fromFunction(new LiveSmartChargingService(_, _, _, _))

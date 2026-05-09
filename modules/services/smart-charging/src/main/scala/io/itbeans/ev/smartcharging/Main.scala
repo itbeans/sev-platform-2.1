@@ -42,6 +42,8 @@ object Main extends ZIOAppDefault:
       MongoSmartChargingRepository.live,
       // ── SAP optimizer HTTP client ──────────────────────────────────────
       SapSmartChargingClient.live,
+      // ── OCPP Gateway gRPC client (for SetChargingProfile delivery) ─────
+      SmartChargingGatewayClient.live,
       // ── Business logic ─────────────────────────────────────────────────
       LiveSmartChargingService.live,
       LiveSmartChargingGrpcHandler.live,
