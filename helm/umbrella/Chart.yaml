@@ -1,0 +1,95 @@
+apiVersion: v2
+name: ev-server
+description: |
+  Umbrella Helm chart for the ev-server Scala microservices platform.
+
+  All 13 services are included as local file:// dependencies.  Each service
+  can be individually enabled/disabled via <service>.enabled in values.yaml,
+  supporting the Strangler Fig migration strategy where services are introduced
+  one at a time alongside the TypeScript monolith.
+
+  Phase 2 services (low-risk, no real-time dependencies):
+    ev-notification, ev-car, ev-pricing-service, ev-asset
+
+  Phase 3 services (core, parallel-run with TypeScript):
+    ev-auth-service, ev-roaming, ev-billing-service
+
+  Phase 4 services (real-time core, last to migrate):
+    ev-smart-charging, ev-rest-api, ev-ocpp-gateway, ev-ocpp-processor
+
+  Infrastructure services (always on once deployed):
+    ev-scheduler, ev-analytics
+
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+dependencies:
+  # ── Phase 2 — low-risk services ─────────────────────────────────────────
+  - name: ev-notification
+    version: "0.1.0"
+    repository: "file://../charts/ev-notification"
+    condition: ev-notification.enabled
+
+  - name: ev-car
+    version: "0.1.0"
+    repository: "file://../charts/ev-car"
+    condition: ev-car.enabled
+
+  - name: ev-pricing-service
+    version: "0.1.0"
+    repository: "file://../charts/ev-pricing-service"
+    condition: ev-pricing-service.enabled
+
+  - name: ev-asset
+    version: "0.1.0"
+    repository: "file://../charts/ev-asset"
+    condition: ev-asset.enabled
+
+  # ── Phase 3 — core services ──────────────────────────────────────────────
+  - name: ev-auth-service
+    version: "0.1.0"
+    repository: "file://../charts/ev-auth-service"
+    condition: ev-auth-service.enabled
+
+  - name: ev-roaming
+    version: "0.1.0"
+    repository: "file://../charts/ev-roaming"
+    condition: ev-roaming.enabled
+
+  - name: ev-billing-service
+    version: "0.1.0"
+    repository: "file://../charts/ev-billing-service"
+    condition: ev-billing-service.enabled
+
+  # ── Phase 4 — real-time core ─────────────────────────────────────────────
+  - name: ev-smart-charging
+    version: "0.1.0"
+    repository: "file://../charts/ev-smart-charging"
+    condition: ev-smart-charging.enabled
+
+  - name: ev-rest-api
+    version: "0.1.0"
+    repository: "file://../charts/ev-rest-api"
+    condition: ev-rest-api.enabled
+
+  - name: ev-ocpp-gateway
+    version: "0.1.0"
+    repository: "file://../charts/ev-ocpp-gateway"
+    condition: ev-ocpp-gateway.enabled
+
+  - name: ev-ocpp-processor
+    version: "0.1.0"
+    repository: "file://../charts/ev-ocpp-processor"
+    condition: ev-ocpp-processor.enabled
+
+  # ── Infrastructure services ───────────────────────────────────────────────
+  - name: ev-scheduler
+    version: "0.1.0"
+    repository: "file://../charts/ev-scheduler"
+    condition: ev-scheduler.enabled
+
+  - name: ev-analytics
+    version: "0.1.0"
+    repository: "file://../charts/ev-analytics"
+    condition: ev-analytics.enabled

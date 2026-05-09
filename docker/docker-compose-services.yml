@@ -1,0 +1,276 @@
+version: "3.9"
+
+# ---------------------------------------------------------------------------
+# Scala microservices — all 13 services as Docker containers.
+#
+# Requires the infra stack to be running first:
+#   docker compose -f docker/docker-compose-local.yml up -d
+#
+# Build images first (from scala-services/):
+#   sbt docker:publishLocal
+#
+# Then start services:
+#   docker compose -f docker/docker-compose-services.yml up -d
+#
+# Or use the convenience script:
+#   ./scripts/up.sh
+# ---------------------------------------------------------------------------
+
+# Reuse the network created by docker-compose-local.yml
+networks:
+  ev-local:
+    external: true
+
+# ── Common env fragments ───────────────────────────────────────────────────────
+x-mongo: &mongo-env
+  MONGODB_URI: mongodb://mongo:27017
+  MONGODB_DBNAME: evse
+
+x-kafka: &kafka-env
+  KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+
+x-jwt: &jwt-env
+  JWT_SECRET: change-me-local
+
+services:
+
+  # ── ev-auth-service ──────────────────────────────────────────────────────────
+  # Must start before ocpp-gateway, ocpp-processor, rest-api (gRPC dependency)
+  auth-service:
+    image: ev-auth-service:latest
+    container_name: ev-auth-service
+    restart: unless-stopped
+    networks:
+      - ev-local
+    ports:
+      - "8084:8080"    # HTTP (login, tenant lookup)
+      - "50051:9090"   # gRPC (ValidateToken, ResolveOcppAuthorize)
+    environment:
+      AUTH_HTTP_PORT:   8080
+      AUTH_GRPC_PORT:   9090
+      MONGO_URI:        mongodb://mongo:27017
+      MONGO_DB_NAME:    evserver
+      AUTH_JWT_SECRET:  change-me-local
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  # ── ev-pricing-service ───────────────────────────────────────────────────────
+  # Must start before ocpp-processor (gRPC dependency)
+  pricing-service:
+    image: ev-pricing-service:latest
+    container_name: ev-pricing-service
+    restart: unless-stopped
+    networks:
+      - ev-local
+    ports:
+      - "8086:8080"    # HTTP (admin)
+      - "50052:9090"   # gRPC (ResolvePricing, PriceConsumption)
+    environment:
+      PRICING_HTTP_PORT: 8080
+      PRICING_GRPC_PORT: 9090
+      <<: [*mongo-env, *kafka-env]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  # ── ev-billing-service ───────────────────────────────────────────────────────
+  billing-service:
+    image: ev-billing-service:latest
+    container_name: ev-billing-service
+    restart: unless-stopped
+    networks:
+      - ev-local
+    ports:
+      - "8085:8080"    # HTTP
+      - "50053:9090"   # gRPC
+    environment:
+      BILLING_HTTP_PORT: 8080
+      BILLING_GRPC_PORT: 9090
+      <<: [*mongo-env, *kafka-env]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  # ── ev-ocpp-gateway ──────────────────────────────────────────────────────────
+  # WebSocket gateway — must start before ocpp-processor and rest-api
+  ocpp-gateway:
+    image: ev-ocpp-gateway:latest
+    container_name: ev-ocpp-gateway
+    restart: unless-stopped
+    networks:
+      - ev-local
+    ports:
+      - "8010:8010"    # WebSocket (OCPP) + HTTP health/metrics/registry
+      - "9091:9090"    # gRPC (SendCommand, SendResponse)
+    environment:
+      GATEWAY_HTTP_PORT: 8010
+      GATEWAY_GRPC_PORT: 9090
+      AUTH_GRPC_HOST:    auth-service
+      AUTH_GRPC_PORT:    "9090"
+      <<: [*kafka-env, *jwt-env]
+    depends_on:
+      auth-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8010/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  # ── ev-ocpp-processor ────────────────────────────────────────────────────────
+  # Kafka consumer — no HTTP port, depends on gateway + auth + pricing
+  ocpp-processor:
+    image: ev-ocpp-processor:latest
+    container_name: ev-ocpp-processor
+    restart: unless-stopped
+    networks:
+      - ev-local
+    environment:
+      AUTH_GRPC_HOST:         auth-service
+      AUTH_GRPC_PORT:         "9090"
+      PRICING_GRPC_HOST:      pricing-service
+      PRICING_GRPC_PORT:      "9090"
+      OCPP_GATEWAY_GRPC_HOST: ocpp-gateway
+      OCPP_GATEWAY_GRPC_PORT: "9090"
+      <<: [*mongo-env, *kafka-env]
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      pricing-service:
+        condition: service_healthy
+      ocpp-gateway:
+        condition: service_healthy
+
+  # ── ev-rest-api ──────────────────────────────────────────────────────────────
+  rest-api:
+    image: ev-rest-api:latest
+    container_name: ev-rest-api
+    restart: unless-stopped
+    networks:
+      - ev-local
+    ports:
+      - "8080:8080"    # HTTP REST API
+    environment:
+      REST_API_HTTP_PORT:         8080
+      AUTH_GRPC_HOST:             auth-service
+      AUTH_GRPC_PORT:             "9090"
+      OCPP_GATEWAY_GRPC_HOST:     ocpp-gateway
+      OCPP_GATEWAY_GRPC_PORT:     "9090"
+      BILLING_GRPC_HOST:          billing-service
+      BILLING_GRPC_PORT:          "9090"
+      ANALYTICS_BASE_URL:         http://analytics:8080
+      <<: [*mongo-env, *jwt-env]
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      ocpp-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  # ── ev-smart-charging ────────────────────────────────────────────────────────
+  smart-charging:
+    image: ev-smart-charging:latest
+    container_name: ev-smart-charging
+    restart: unless-stopped
+    networks:
+      - ev-local
+    ports:
+      - "8087:8080"
+    environment:
+      SMART_CHARGING_HTTP_PORT: 8080
+      <<: [*mongo-env, *kafka-env]
+
+  # ── ev-notification ──────────────────────────────────────────────────────────
+  notification:
+    image: ev-notification:latest
+    container_name: ev-notification
+    restart: unless-stopped
+    networks:
+      - ev-local
+    environment:
+      SMTP_HOST:     mailpit
+      SMTP_PORT:     "1025"
+      <<: [*mongo-env, *kafka-env]
+
+  # ── ev-roaming ───────────────────────────────────────────────────────────────
+  roaming:
+    image: ev-roaming:latest
+    container_name: ev-roaming
+    restart: unless-stopped
+    networks:
+      - ev-local
+    ports:
+      - "8088:8080"
+    environment:
+      ROAMING_HTTP_PORT: 8080
+      <<: [*mongo-env, *kafka-env]
+
+  # ── ev-asset ─────────────────────────────────────────────────────────────────
+  asset:
+    image: ev-asset:latest
+    container_name: ev-asset
+    restart: unless-stopped
+    networks:
+      - ev-local
+    ports:
+      - "8089:8080"
+    environment:
+      ASSET_HTTP_PORT: 8080
+      <<: [*mongo-env, *kafka-env]
+
+  # ── ev-car ───────────────────────────────────────────────────────────────────
+  car:
+    image: ev-car:latest
+    container_name: ev-car
+    restart: unless-stopped
+    networks:
+      - ev-local
+    ports:
+      - "50054:9090"   # gRPC (GetUserDefaultCar)
+    environment:
+      <<: [*mongo-env, *kafka-env]
+
+  # ── ev-scheduler ─────────────────────────────────────────────────────────────
+  scheduler:
+    image: ev-scheduler:latest
+    container_name: ev-scheduler
+    restart: unless-stopped
+    networks:
+      - ev-local
+    ports:
+      - "8091:8080"
+    environment:
+      SCHEDULER_HTTP_PORT: 8080
+      <<: [*mongo-env, *kafka-env]
+
+  # ── ev-analytics ─────────────────────────────────────────────────────────────
+  analytics:
+    image: ev-analytics:latest
+    container_name: ev-analytics
+    restart: unless-stopped
+    networks:
+      - ev-local
+    ports:
+      - "8092:8080"
+    environment:
+      ANALYTICS_HTTP_PORT: 8080
+      POSTGRES_URL: jdbc:postgresql://postgres:5432/ev_local
+      POSTGRES_USER: ev
+      POSTGRES_PASSWORD: ev_local_secret
+      <<: [*kafka-env]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6

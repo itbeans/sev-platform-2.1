@@ -1,0 +1,207 @@
+{
+  "title": "EV Platform — Overview",
+  "uid": "ev-platform-overview",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "type": "query",
+        "label": "Service",
+        "datasource": "Prometheus",
+        "query": "label_values(jvm_memory_used_bytes, service)",
+        "multi": true,
+        "includeAll": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Active WebSocket Connections (OCPP Gateway)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(ocpp_gateway_active_connections)",
+          "legendFormat": "Active stations"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "thresholds": {
+          "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 800 },
+            { "color": "red", "value": 950 }
+          ]
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "OCPP Message Throughput (events/s)",
+      "type": "timeseries",
+      "gridPos": { "x": 6, "y": 0, "w": 10, "h": 4 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(ocpp_messages_received_total[1m])) by (action)",
+          "legendFormat": "{{action}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "OCPP Response Latency p99 (ms)",
+      "type": "gauge",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 4 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(ocpp_response_duration_ms_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "p99 latency ms"
+        }
+      ],
+      "options": {
+        "thresholds": {
+          "steps": [
+            { "color": "green",  "value": null },
+            { "color": "yellow", "value": 5000 },
+            { "color": "red",    "value": 25000 }
+          ]
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Kafka Consumer Lag — ocpp.events",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 5 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(kafka_consumer_group_lag) by (topic, partition)",
+          "legendFormat": "{{topic}}[{{partition}}]"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1000 },
+              { "color": "red",    "value": 5000 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Transactions per Minute",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 5 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(transactions_lifecycle_total{action='Stop'}[1m])) * 60",
+          "legendFormat": "tx stopped/min"
+        },
+        {
+          "expr": "sum(rate(transactions_lifecycle_total{action='Start'}[1m])) * 60",
+          "legendFormat": "tx started/min"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Service HTTP Error Rate (%)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 9, "w": 12, "h": 5 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "100 * sum(rate(http_requests_total{status=~'5..', service=~'$service'}[5m])) by (service) / sum(rate(http_requests_total{service=~'$service'}[5m])) by (service)",
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red",    "value": 5 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "JVM Heap Usage by Service",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 9, "w": 12, "h": 5 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(jvm_memory_used_bytes{area='heap', service=~'$service'}) by (service) / 1048576",
+          "legendFormat": "{{service}} (MB)"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "megabytes" } }
+    },
+    {
+      "id": 8,
+      "title": "gRPC Request Rate by Method",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 14, "w": 12, "h": 5 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(grpc_server_handled_total[1m])) by (grpc_method)",
+          "legendFormat": "{{grpc_method}}"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Notification Delivery (email + push)",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 14, "w": 6, "h": 5 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(increase(notifications_sent_total{channel='email'}[1h]))",
+          "legendFormat": "Email (1h)"
+        },
+        {
+          "expr": "sum(increase(notifications_sent_total{channel='push'}[1h]))",
+          "legendFormat": "Push (1h)"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Billing Invoices Created (1h)",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 14, "w": 6, "h": 5 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(increase(billing_invoices_created_total[1h]))",
+          "legendFormat": "Invoices"
+        }
+      ],
+      "options": { "colorMode": "value" }
+    }
+  ]
+}

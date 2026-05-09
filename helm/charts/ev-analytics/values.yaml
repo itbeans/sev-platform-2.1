@@ -1,0 +1,42 @@
+image:
+  repository: ghcr.io/itbeans/ev-analytics
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  type: ClusterIP
+  httpPort: 8080
+  grpcPort: 0
+  wsPort: 0
+  sessionAffinity: None
+
+ingress:
+  enabled: false
+  className: kong
+  annotations: {}
+  hosts: []
+  tls: []
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+env:
+  LOG_LEVEL: "INFO"
+  # TimescaleDB chunk interval for consumptions hypertable
+  TIMESCALE_CHUNK_INTERVAL: "7 days"
+
+envFromSecrets:
+  - ev-analytics-secrets   # POSTGRES_URI (TimescaleDB), KAFKA_BOOTSTRAP

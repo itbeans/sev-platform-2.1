@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ev-smart-charging
+description: SAP Smart Charging integration — optimal profile computation and application
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

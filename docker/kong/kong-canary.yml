@@ -1,0 +1,155 @@
+_format_version: "3.0"
+_transform: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Canary routing configuration
+#
+# Each critical path has an upstream with two targets:
+#   - typescript-monolith  (legacy, starts at 100 %)
+#   - scala service        (new,    starts at   0 %)
+#
+# Shift traffic by patching target weights via the Kong Admin API:
+#   scripts/canary.sh set ocpp-gateway 5    # → 5 % Scala for OCPP WS
+#   scripts/canary.sh set rest-api     25   # → 25 % Scala for REST API
+#   scripts/canary.sh rollback ocpp-gateway # → back to 100 % TypeScript
+#
+# Phase 2/3 services (notification, car, pricing, asset, auth, roaming,
+# billing) route exclusively to Scala from day one — they have no
+# TypeScript equivalent on these paths.
+# ─────────────────────────────────────────────────────────────────────────────
+
+upstreams:
+  # ── OCPP WebSocket ──────────────────────────────────────────────────────────
+  - name: ocpp-gateway-upstream
+    algorithm: round-robin
+    healthchecks:
+      active:
+        http_path: /health
+        interval: 10
+        unhealthy:
+          http_failures: 3
+    targets:
+      - target: typescript-monolith:3000
+        weight: 100
+        tags: [phase4, typescript]
+      - target: ocpp-gateway:8010
+        weight: 0
+        tags: [phase4, scala]
+
+  # ── REST API ────────────────────────────────────────────────────────────────
+  - name: rest-api-upstream
+    algorithm: round-robin
+    healthchecks:
+      active:
+        http_path: /health
+        interval: 10
+        unhealthy:
+          http_failures: 3
+    targets:
+      - target: typescript-monolith:3000
+        weight: 100
+        tags: [phase4, typescript]
+      - target: rest-api:8080
+        weight: 0
+        tags: [phase4, scala]
+
+  # ── Auth ─────────────────────────────────────────────────────────────────
+  - name: auth-upstream
+    algorithm: round-robin
+    healthchecks:
+      active:
+        http_path: /health
+        interval: 10
+        unhealthy:
+          http_failures: 3
+    targets:
+      - target: typescript-monolith:3000
+        weight: 100
+        tags: [phase3, typescript]
+      - target: auth-service:8080
+        weight: 0
+        tags: [phase3, scala]
+
+  # ── OCPI Roaming ─────────────────────────────────────────────────────────
+  - name: roaming-upstream
+    algorithm: round-robin
+    healthchecks:
+      active:
+        http_path: /health
+        interval: 10
+        unhealthy:
+          http_failures: 3
+    targets:
+      - target: typescript-monolith:3000
+        weight: 100
+        tags: [phase3, typescript]
+      - target: roaming:8080
+        weight: 0
+        tags: [phase3, scala]
+
+services:
+  # ── OCPP WebSocket gateway ──────────────────────────────────────────────────
+  - name: ev-ocpp-gateway-ws
+    host: ocpp-gateway-upstream
+    port: 80
+    protocol: http
+    # Sticky routing: a station that reconnects must land on the pod holding its
+    # fiber.  Kong hashes on the Authorization header (which carries station ID)
+    # so the same upstream pod is selected on reconnect.
+    routes:
+      - name: ocpp-21
+        paths: ["/ocpp/2.1"]
+        protocols: [http, https, ws, wss]
+        strip_path: false
+      - name: ocpp-201
+        paths: ["/ocpp/2.0.1"]
+        protocols: [http, https, ws, wss]
+        strip_path: false
+      - name: ocpp-16
+        paths: ["/ocpp/1.6"]
+        protocols: [http, https, ws, wss]
+        strip_path: false
+    plugins:
+      - name: upstream-timeout
+        config:
+          connect_timeout: 60000
+          write_timeout: 60000
+          read_timeout: 3600000   # 1 h — WS connections are long-lived
+
+  # ── REST API ────────────────────────────────────────────────────────────────
+  - name: ev-rest-api
+    host: rest-api-upstream
+    port: 80
+    protocol: http
+    routes:
+      - name: rest-api
+        paths: ["/api/v1"]
+        protocols: [http, https]
+
+  # ── Auth service ────────────────────────────────────────────────────────────
+  - name: ev-auth-service
+    host: auth-upstream
+    port: 80
+    protocol: http
+    routes:
+      - name: auth
+        paths: ["/auth"]
+        protocols: [http, https]
+
+  # ── OCPI roaming ────────────────────────────────────────────────────────────
+  - name: ev-roaming
+    host: roaming-upstream
+    port: 80
+    protocol: http
+    routes:
+      - name: ocpi
+        paths: ["/ocpi"]
+        protocols: [http, https]
+
+  # ── Analytics (Scala-only, no canary needed) ────────────────────────────────
+  - name: ev-analytics
+    url: http://analytics:8080
+    routes:
+      - name: analytics
+        paths: ["/analytics"]
+        protocols: [http, https]

@@ -1,0 +1,31 @@
+# Phase 3 — automated sync (well-defined OCPI/OICP external contracts)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ev-roaming
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: ev-platform
+
+  source:
+    repoURL: https://github.com/itbeans/ev-server
+    targetRevision: main
+    path: scala-services/helm/charts/ev-roaming
+    helm:
+      valueFiles:
+        - ../../../argocd/values/staging.yaml
+        - ../../../argocd/values/image-tags.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ev-platform
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

@@ -1,0 +1,165 @@
+[
+  {
+    "_comment": "Simple energy-only session",
+    "transactionId": 1001,
+    "tenantId": "tenant-acme",
+    "chargingStationId": "CS-001",
+    "userId": "user-alice",
+    "pricingId": "energy-only-30p",
+    "startDate": "2024-06-01T09:00:00Z",
+    "endDate":   "2024-06-01T10:30:00Z",
+    "meterStartWh": 0,
+    "meterStopWh":  22500,
+    "stopReason": "Local",
+    "tariff": {
+      "type": "ENERGY",
+      "pricePerKwh": 0.30,
+      "currency": "GBP"
+    },
+    "expectedResult": {
+      "totalAmountCents": 675,
+      "consumptionKwh":   22.5,
+      "durationSecs":     5400,
+      "dimensions": [
+        { "type": "ENERGY", "unitPrice": 0.30, "quantity": 22.5, "amountCents": 675 }
+      ]
+    }
+  },
+  {
+    "_comment": "Flat session fee + energy",
+    "transactionId": 1002,
+    "tenantId": "tenant-acme",
+    "chargingStationId": "CS-002",
+    "userId": "user-bob",
+    "pricingId": "flat-plus-energy",
+    "startDate": "2024-06-01T12:00:00Z",
+    "endDate":   "2024-06-01T13:00:00Z",
+    "meterStartWh": 0,
+    "meterStopWh":  7200,
+    "stopReason": "Remote",
+    "tariff": {
+      "type": "FLAT_FEE_PLUS_ENERGY",
+      "flatFeeCents": 500,
+      "pricePerKwh": 0.25,
+      "currency": "GBP"
+    },
+    "expectedResult": {
+      "totalAmountCents": 680,
+      "consumptionKwh":   7.2,
+      "durationSecs":     3600,
+      "dimensions": [
+        { "type": "FLAT_FEE", "unitPrice": 5.00,  "quantity": 1.0, "amountCents": 500 },
+        { "type": "ENERGY",   "unitPrice": 0.25,  "quantity": 7.2, "amountCents": 180 }
+      ]
+    }
+  },
+  {
+    "_comment": "Charging time + energy with free kWh allowance",
+    "transactionId": 1003,
+    "tenantId": "tenant-acme",
+    "chargingStationId": "CS-003",
+    "userId": "user-carol",
+    "pricingId": "time-plus-energy-allowance",
+    "startDate": "2024-06-01T14:00:00Z",
+    "endDate":   "2024-06-01T15:30:00Z",
+    "meterStartWh": 0,
+    "meterStopWh":  15000,
+    "stopReason": "EVDisconnected",
+    "tariff": {
+      "type": "TIME_PLUS_ENERGY",
+      "pricePerMinute": 0.05,
+      "pricePerKwh": 0.28,
+      "freeKwh": 5.0,
+      "currency": "GBP"
+    },
+    "expectedResult": {
+      "totalAmountCents": 730,
+      "consumptionKwh":   15.0,
+      "durationSecs":     5400,
+      "dimensions": [
+        { "type": "CHARGING_TIME", "unitPrice": 0.05, "quantity": 90.0, "amountCents": 450 },
+        { "type": "ENERGY",        "unitPrice": 0.28, "quantity": 10.0, "amountCents": 280 }
+      ]
+    }
+  },
+  {
+    "_comment": "Zero consumption (cable plugged but no energy delivered)",
+    "transactionId": 1004,
+    "tenantId": "tenant-acme",
+    "chargingStationId": "CS-001",
+    "userId": "user-alice",
+    "pricingId": "energy-only-30p",
+    "startDate": "2024-06-02T08:00:00Z",
+    "endDate":   "2024-06-02T08:02:00Z",
+    "meterStartWh": 100,
+    "meterStopWh":  100,
+    "stopReason": "Local",
+    "tariff": {
+      "type": "ENERGY",
+      "pricePerKwh": 0.30,
+      "currency": "GBP"
+    },
+    "expectedResult": {
+      "totalAmountCents": 0,
+      "consumptionKwh":   0.0,
+      "durationSecs":     120,
+      "dimensions": []
+    }
+  },
+  {
+    "_comment": "Parking overstay fee after charging ends",
+    "transactionId": 1005,
+    "tenantId": "tenant-acme",
+    "chargingStationId": "CS-004",
+    "userId": "user-dave",
+    "pricingId": "parking-overstay",
+    "startDate": "2024-06-02T10:00:00Z",
+    "endDate":   "2024-06-02T12:00:00Z",
+    "meterStartWh": 0,
+    "meterStopWh":  30000,
+    "chargingEndedAt": "2024-06-02T11:00:00Z",
+    "stopReason": "Local",
+    "tariff": {
+      "type": "ENERGY_PLUS_PARKING",
+      "pricePerKwh": 0.30,
+      "parkingFeePerMinute": 0.10,
+      "freeParkingMinutes": 10,
+      "currency": "GBP"
+    },
+    "expectedResult": {
+      "totalAmountCents": 1450,
+      "consumptionKwh":   30.0,
+      "durationSecs":     7200,
+      "dimensions": [
+        { "type": "ENERGY",       "unitPrice": 0.30, "quantity": 30.0, "amountCents": 900 },
+        { "type": "PARKING_TIME", "unitPrice": 0.10, "quantity": 50.0, "amountCents": 550 }
+      ]
+    }
+  },
+  {
+    "_comment": "Multi-tenant isolation check — same tariff ID, different tenant",
+    "transactionId": 2001,
+    "tenantId": "tenant-beta",
+    "chargingStationId": "CS-B-001",
+    "userId": "user-beta-alice",
+    "pricingId": "energy-only-30p",
+    "startDate": "2024-06-01T09:00:00Z",
+    "endDate":   "2024-06-01T10:00:00Z",
+    "meterStartWh": 0,
+    "meterStopWh":  10000,
+    "stopReason": "Local",
+    "tariff": {
+      "type": "ENERGY",
+      "pricePerKwh": 0.35,
+      "currency": "EUR"
+    },
+    "expectedResult": {
+      "totalAmountCents": 350,
+      "consumptionKwh":   10.0,
+      "durationSecs":     3600,
+      "dimensions": [
+        { "type": "ENERGY", "unitPrice": 0.35, "quantity": 10.0, "amountCents": 350 }
+      ]
+    }
+  }
+]

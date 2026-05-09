@@ -1,0 +1,58 @@
+image:
+  repository: ghcr.io/itbeans/ev-rest-api
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 3
+
+service:
+  type: ClusterIP
+  httpPort: 8080
+  grpcPort: 0
+  wsPort: 0
+  sessionAffinity: None
+
+# Dashboard frontend and mobile apps reach this service from outside the cluster
+ingress:
+  enabled: true
+  className: kong
+  annotations:
+    konghq.com/strip-path: "false"
+    konghq.com/https-redirect-status-code: "308"
+    # JWT validation via Kong plugin — configured separately in Kong declarative config
+    konghq.com/plugins: "jwt-auth"
+  hosts:
+    - host: api.example.com
+      paths:
+        - path: /v1
+          pathType: Prefix
+          portName: http
+  tls: []
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 65
+
+env:
+  REST_API_HTTP_PORT: "8080"
+  # Cross-service gRPC — env var names match application.conf ${?ENV_VAR} bindings
+  AUTH_GRPC_HOST: "ev-auth-service"
+  AUTH_GRPC_PORT: "9090"
+  OCPP_GATEWAY_GRPC_HOST: "ev-ocpp-gateway"
+  OCPP_GATEWAY_GRPC_PORT: "9090"
+  BILLING_GRPC_HOST: "ev-billing-service"
+  BILLING_GRPC_PORT: "9090"
+  ANALYTICS_BASE_URL: "http://ev-analytics:8080"
+
+envFromSecrets:
+  - ev-rest-api-secrets   # MONGODB_URI, JWT_SECRET

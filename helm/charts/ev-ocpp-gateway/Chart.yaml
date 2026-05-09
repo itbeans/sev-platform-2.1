@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ev-ocpp-gateway
+description: OCPP WebSocket gateway — manages all charging station connections with sticky routing
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

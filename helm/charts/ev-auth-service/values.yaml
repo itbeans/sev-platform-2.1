@@ -1,0 +1,44 @@
+image:
+  repository: ghcr.io/itbeans/ev-auth-service
+  tag: ""          # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  type: ClusterIP
+  httpPort: 8080
+  grpcPort: 9090
+  wsPort: 0        # not used
+  sessionAffinity: None
+
+ingress:
+  enabled: false
+  className: kong
+  annotations: {}
+  hosts: []
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 70
+
+# Extra environment variables (non-sensitive; secrets go via envFromSecrets)
+env:
+  LOG_LEVEL: "INFO"
+  JWT_ISSUER: "ev-server"
+  JWT_EXPIRY_SECONDS: "86400"
+
+# Kubernetes Secret names whose env vars are injected into the container
+envFromSecrets:
+  - ev-auth-service-secrets   # JWT_SECRET, MONGO_URI

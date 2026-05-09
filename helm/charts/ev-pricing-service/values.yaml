@@ -1,0 +1,40 @@
+image:
+  repository: ghcr.io/itbeans/ev-pricing-service
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  type: ClusterIP
+  httpPort: 8080
+  grpcPort: 9090
+  wsPort: 0
+  sessionAffinity: None
+
+ingress:
+  enabled: false
+  className: kong
+  annotations: {}
+  hosts: []
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+env:
+  LOG_LEVEL: "INFO"
+
+envFromSecrets:
+  - ev-pricing-service-secrets  # MONGO_URI

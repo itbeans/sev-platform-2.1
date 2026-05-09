@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ev-analytics
+description: Audit logs, statistics, and consumption aggregates backed by TimescaleDB
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

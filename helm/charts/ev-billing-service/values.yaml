@@ -1,0 +1,42 @@
+image:
+  repository: ghcr.io/itbeans/ev-billing-service
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  type: ClusterIP
+  httpPort: 8080
+  grpcPort: 9090
+  wsPort: 0
+  sessionAffinity: None
+
+ingress:
+  enabled: false
+  className: kong
+  annotations: {}
+  hosts: []
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+env:
+  LOG_LEVEL: "INFO"
+  # Billing periodic jobs
+  BILLING_PERIODIC_FREQUENCY_SECONDS: "3600"
+
+envFromSecrets:
+  - ev-billing-service-secrets  # STRIPE_SECRET_KEY, MONGO_URI, POSTGRES_URI, KAFKA_BOOTSTRAP

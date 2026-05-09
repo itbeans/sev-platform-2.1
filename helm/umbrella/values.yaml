@@ -1,0 +1,102 @@
+# ── Global values injected into every subchart ───────────────────────────────
+# Override these per environment (dev / staging / prod) via separate values files
+# or Kubernetes ExternalSecrets.  Secrets (MONGO_URI, KAFKA creds, etc.) must be
+# in Kubernetes Secrets referenced by each chart's envFromSecrets list.
+global:
+  # Container image registry prefix — override to use a private registry
+  imageRegistry: ghcr.io/itbeans
+  # Tag applied to all services when not individually overridden
+  imageTag: "0.1.0"
+  # MongoDB connection string — typically overridden via a sealed secret
+  mongoUri: ""
+  # Kafka bootstrap servers (comma-separated host:port pairs)
+  kafkaBootstrap: ""
+
+# ── Per-service enable/disable switches ───────────────────────────────────────
+# Strangler Fig migration: flip to true as each service is ready for production.
+# During parallel-run, keep TypeScript and Scala services both enabled and use
+# Kong upstream weights to route a percentage of traffic to the Scala service.
+
+# Phase 2 — low-risk; build first
+ev-notification:
+  enabled: false
+
+ev-car:
+  enabled: false
+
+ev-pricing-service:
+  enabled: false
+
+ev-asset:
+  enabled: false
+
+# Phase 3 — core services; 60-day parallel run with TypeScript counterparts
+ev-auth-service:
+  enabled: false
+
+ev-roaming:
+  enabled: false
+
+ev-billing-service:
+  enabled: false
+
+# Phase 4 — real-time core; migrate last
+ev-smart-charging:
+  enabled: false
+
+ev-rest-api:
+  enabled: false
+
+ev-ocpp-gateway:
+  enabled: false
+
+ev-ocpp-processor:
+  enabled: false
+
+# Infrastructure — enable once the first Scala service is deployed
+ev-scheduler:
+  enabled: false
+
+ev-analytics:
+  enabled: false
+
+# ── Service-level value overrides ─────────────────────────────────────────────
+# To override any per-service value, nest it under the chart name key, e.g.:
+#
+#   ev-auth-service:
+#     enabled: true
+#     replicaCount: 3
+#     image:
+#       tag: "1.2.0"
+#     env:
+#       LOG_LEVEL: "DEBUG"
+#
+# Production ingress hostnames — replace example.com with the actual domain:
+#
+#   ev-rest-api:
+#     enabled: true
+#     ingress:
+#       hosts:
+#         - host: api.ev.acme.com
+#           paths:
+#             - path: /v1
+#               pathType: Prefix
+#               portName: http
+#       tls:
+#         - secretName: ev-rest-api-tls
+#           hosts:
+#             - api.ev.acme.com
+#
+#   ev-ocpp-gateway:
+#     enabled: true
+#     ingress:
+#       hosts:
+#         - host: ocpp.ev.acme.com
+#           paths:
+#             - path: /
+#               pathType: Prefix
+#               portName: ws
+#       tls:
+#         - secretName: ev-ocpp-gateway-tls
+#           hosts:
+#             - ocpp.ev.acme.com

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ev-billing-service
+description: Stripe billing integration — invoices, payment methods, and Stripe Connect transfers
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

@@ -1,0 +1,59 @@
+image:
+  repository: ghcr.io/itbeans/ev-ocpp-gateway
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Minimum 3 replicas for WebSocket HA — stations reconnect on pod restart
+replicaCount: 3
+
+service:
+  type: ClusterIP
+  # ZIO HTTP serves WebSocket upgrades, /health, and /metrics all on the same
+  # port (8010). There is no separate httpPort.
+  httpPort: 8010
+  grpcPort: 9090   # gRPC (SendCommand / SendResponse from ocpp-processor, rest-api)
+  wsPort: 0        # 0 = same as httpPort; no separate port needed
+  # ClientIP affinity ensures reconnecting stations land on the same pod
+  # (Kong upstream hash_on: ip provides L7 stickiness for initial connects)
+  sessionAffinity: ClientIP
+
+# OCPP WebSocket endpoint exposed externally via Kong
+ingress:
+  enabled: true
+  className: kong
+  annotations:
+    konghq.com/protocols: "ws,wss"
+    konghq.com/https-redirect-status-code: "301"
+  hosts:
+    - host: ocpp.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          portName: http   # refers to service port named "http" (8010)
+  tls: []
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 60
+
+env:
+  GATEWAY_HTTP_PORT: "8010"
+  GATEWAY_GRPC_PORT: "9090"
+  # Cross-service gRPC — resolved by Kubernetes DNS within the cluster
+  AUTH_GRPC_HOST: "ev-auth-service"
+  AUTH_GRPC_PORT: "9090"
+  # OCPP response deadline — must be < 30 s per OCPP spec
+  GATEWAY_RESPONSE_TIMEOUT_MS: "25000"
+
+envFromSecrets:
+  - ev-ocpp-gateway-secrets   # KAFKA_BOOTSTRAP_SERVERS, JWT_SECRET

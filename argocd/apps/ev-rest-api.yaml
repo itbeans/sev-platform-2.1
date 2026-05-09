@@ -1,0 +1,29 @@
+# Phase 4 — MANUAL sync (dashboard HTTP API; full auth/billing/gateway integration)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ev-rest-api
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: ev-platform
+
+  source:
+    repoURL: https://github.com/itbeans/ev-server
+    targetRevision: main
+    path: scala-services/helm/charts/ev-rest-api
+    helm:
+      valueFiles:
+        - ../../../argocd/values/staging.yaml
+        - ../../../argocd/values/image-tags.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ev-platform
+
+  # No syncPolicy.automated — operator must run `argocd app sync ev-rest-api`
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

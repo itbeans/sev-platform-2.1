@@ -1,0 +1,42 @@
+image:
+  repository: ghcr.io/itbeans/ev-notification
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  type: ClusterIP
+  httpPort: 8080   # health + metrics only — no external HTTP traffic
+  grpcPort: 0
+  wsPort: 0
+  sessionAffinity: None
+
+ingress:
+  enabled: false
+  className: kong
+  annotations: {}
+  hosts: []
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 300m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+env:
+  LOG_LEVEL: "INFO"
+  # MJML rendering timeout
+  EMAIL_RENDER_TIMEOUT_MS: "5000"
+
+envFromSecrets:
+  - ev-notification-secrets   # SMTP_HOST, SMTP_USER, SMTP_PASSWORD, FIREBASE_SERVICE_ACCOUNT_JSON, KAFKA_BOOTSTRAP

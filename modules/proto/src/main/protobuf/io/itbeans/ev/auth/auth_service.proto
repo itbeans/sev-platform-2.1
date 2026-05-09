@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package io.itbeans.ev.auth;
+
+option java_package = "io.itbeans.ev.auth.grpc";
+option java_outer_classname = "AuthServiceProto";
+
+// ---------------------------------------------------------------------------
+// AuthService — JWT token validation and OCPP authorization.
+// Called synchronously by:
+//   - ev-rest-api       (every authenticated HTTP request)
+//   - ev-ocpp-gateway   (WebSocket upgrade handshake)
+//   - ev-ocpp-processor (OCPP Authorize request from station)
+// ---------------------------------------------------------------------------
+
+service AuthService {
+  // Validate a JWT and return the decoded UserToken payload.
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+
+  // Resolve an OCPP Authorize request (RFID/badge → accept/block/unknown).
+  rpc ResolveOcppAuthorization(OcppAuthorizationRequest) returns (OcppAuthorizationResponse);
+
+  // Resolve tenant subdomain → tenantId (used by Kong plugin and services).
+  rpc ResolveTenant(ResolveTenantRequest) returns (ResolveTenantResponse);
+}
+
+message ValidateTokenRequest {
+  string jwt = 1;
+}
+
+message ValidateTokenResponse {
+  bool   valid        = 1;
+  string error        = 2;  // empty if valid
+  // Serialised UserToken as JSON — avoids defining all 27 fields in protobuf
+  string user_token_json = 3;
+}
+
+message OcppAuthorizationRequest {
+  string tenant_id          = 1;
+  string id_tag             = 2;   // RFID UID or eMAID
+  string id_token_type      = 3;   // OCPP 2.1 IdTokenType enum value
+  string charging_station_id = 4;
+}
+
+message OcppAuthorizationResponse {
+  string status           = 1;   // Accepted, Blocked, Expired, Invalid, etc.
+  int64  expiry_timestamp = 2;   // Unix epoch millis; 0 = no expiry
+  string group_id_tag     = 3;   // optional group tag
+  string parent_id_tag    = 4;   // OCPP 1.6 parentIdTag
+}
+
+message ResolveTenantRequest {
+  string subdomain = 1;
+}
+
+message ResolveTenantResponse {
+  bool   found     = 1;
+  string tenant_id = 2;
+}

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ev-ocpp-processor
+description: OCPP business logic processor — Kafka consumer for BootNotif, MeterValues, transactions
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

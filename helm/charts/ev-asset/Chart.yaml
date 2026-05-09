@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ev-asset
+description: Asset consumption polling — solar panels, batteries, building meters
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package io.itbeans.ev.pricing;
+
+option java_package = "io.itbeans.ev.pricing.grpc";
+option java_outer_classname = "PricingServiceProto";
+
+// ---------------------------------------------------------------------------
+// PricingService — tariff resolution and session pricing computation.
+//
+// Called synchronously by:
+//   - ev-ocpp-processor (StartTransaction → resolve initial price)
+//   - ev-rest-api       (pricing definition CRUD, tariff previews)
+// ---------------------------------------------------------------------------
+
+service PricingService {
+  // Resolve the applicable pricing model for a transaction start.
+  rpc ResolvePricing(ResolvePricingRequest) returns (ResolvePricingResponse);
+
+  // Price a consumption interval (called on each MeterValues update).
+  rpc PriceConsumption(PriceConsumptionRequest) returns (PriceConsumptionResponse);
+
+  // Finalise pricing at transaction end.
+  rpc FinalisePrice(FinalisePriceRequest) returns (FinalisePriceResponse);
+}
+
+message ResolvePricingRequest {
+  string tenant_id           = 1;
+  string charging_station_id = 2;
+  string connector_id        = 3;
+  string user_id             = 4;
+  string tag_id              = 5;
+  int64  start_timestamp     = 6;  // Unix epoch millis
+}
+
+message ResolvePricingResponse {
+  bool   found               = 1;
+  string pricing_model_json  = 2;  // JSON-encoded resolved pricing model
+  string currency            = 3;
+}
+
+message PriceConsumptionRequest {
+  string tenant_id            = 1;
+  string transaction_id       = 2;
+  string pricing_model_json   = 3;
+  double consumption_wh       = 4;
+  double instant_watts        = 5;
+  int64  interval_start       = 6;  // Unix epoch millis
+  int64  interval_end         = 7;
+}
+
+message PriceConsumptionResponse {
+  double price               = 1;
+  double cumulated_price     = 2;
+  string currency            = 3;
+}
+
+message FinalisePriceRequest {
+  string tenant_id            = 1;
+  string transaction_id       = 2;
+  string pricing_model_json   = 3;
+  double total_consumption_wh = 4;
+  int64  start_timestamp      = 5;
+  int64  end_timestamp        = 6;
+}
+
+message FinalisePriceResponse {
+  double total_price  = 1;
+  string currency     = 2;
+  string invoice_item = 3;  // JSON-encoded invoice line item for Billing service
+}

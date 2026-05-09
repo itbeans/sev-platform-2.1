@@ -1,0 +1,42 @@
+image:
+  repository: ghcr.io/itbeans/ev-car
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  type: ClusterIP
+  httpPort: 8080
+  grpcPort: 9090
+  wsPort: 0
+  sessionAffinity: None
+
+ingress:
+  enabled: false
+  className: kong
+  annotations: {}
+  hosts: []
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 300m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+
+env:
+  LOG_LEVEL: "INFO"
+  # Car catalog sync frequency (seconds)
+  CAR_CATALOG_SYNC_INTERVAL_SECONDS: "86400"
+
+envFromSecrets:
+  - ev-car-secrets   # MONGO_URI, TRONITY_CLIENT_ID, TRONITY_CLIENT_SECRET, MERCEDES_API_KEY

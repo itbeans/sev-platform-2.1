@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ev-auth-service
+description: JWT issuance, token validation, and OCPP authorization service
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

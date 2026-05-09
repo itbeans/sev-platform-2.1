@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package io.itbeans.ev.ocpp;
+
+option java_package = "io.itbeans.ev.ocpp.grpc";
+option java_outer_classname = "OcppGatewayProto";
+
+// ---------------------------------------------------------------------------
+// OcppGatewayService — internal gRPC interface for sending commands to
+// charging stations via the live WebSocket connection held by the Gateway.
+//
+// Callers:
+//   - ev-rest-api         (dashboard user triggers RemoteStart/RemoteStop/Reset)
+//   - ev-ocpp-processor   (responding to OCPP CALL messages synchronously)
+//   - ev-smart-charging   (SetChargingProfile after computing optimal profile)
+// ---------------------------------------------------------------------------
+
+service OcppGatewayService {
+  // Send an arbitrary OCPP command to a station.
+  // The gateway finds the live WebSocket for the station and delivers it.
+  rpc SendCommand(SendCommandRequest) returns (SendCommandResponse);
+
+  // Send an OCPP response back to a station for a CALL it made.
+  rpc SendResponse(SendResponseRequest) returns (SendResponseAck);
+
+  // Query which stations are currently connected on this gateway pod.
+  rpc ListConnectedStations(ListConnectedStationsRequest) returns (ListConnectedStationsResponse);
+
+  // Check if a specific station is connected on this pod.
+  rpc IsStationConnected(IsStationConnectedRequest) returns (IsStationConnectedResponse);
+}
+
+message SendCommandRequest {
+  string tenant_id           = 1;
+  string charging_station_id = 2;
+  string action              = 3;   // OcppAction enum value as string
+  string payload_json        = 4;   // JSON-encoded request payload
+  string correlation_id      = 5;   // caller-assigned UUID for tracking
+  int32  timeout_seconds     = 6;   // default 30
+}
+
+message SendCommandResponse {
+  bool   delivered      = 1;  // false if station not connected on this pod
+  string response_json  = 2;  // OCPP CALLRESULT payload JSON
+  string error_code     = 3;  // OCPP CALLERROR code if station returned error
+  string error_message  = 4;
+}
+
+message SendResponseRequest {
+  string tenant_id           = 1;
+  string charging_station_id = 2;
+  string unique_id           = 3;   // OCPP call uniqueId from the original CALL
+  string response_json       = 4;   // CALLRESULT payload JSON
+}
+
+message SendResponseAck {
+  bool delivered = 1;
+}
+
+message ListConnectedStationsRequest {
+  string tenant_id = 1;  // empty = all tenants
+}
+
+message ListConnectedStationsResponse {
+  repeated ConnectedStation stations = 1;
+}
+
+message ConnectedStation {
+  string tenant_id           = 1;
+  string charging_station_id = 2;
+  string ocpp_version        = 3;
+  int64  connected_since     = 4;  // Unix epoch millis
+}
+
+message IsStationConnectedRequest {
+  string tenant_id           = 1;
+  string charging_station_id = 2;
+}
+
+message IsStationConnectedResponse {
+  bool connected = 1;
+}

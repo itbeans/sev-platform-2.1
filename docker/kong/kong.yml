@@ -1,0 +1,52 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  # ── OCPP WebSocket gateway ──────────────────────────────────────────────────
+  - name: ev-ocpp-gateway-ws
+    url: http://ocpp-gateway:8010
+    routes:
+      - name: ocpp-21
+        paths: ["/ocpp/2.1"]
+        protocols: [http, https]
+        strip_path: false
+      - name: ocpp-201
+        paths: ["/ocpp/2.0.1"]
+        protocols: [http, https]
+        strip_path: false
+      - name: ocpp-16
+        paths: ["/ocpp/1.6"]
+        protocols: [http, https]
+        strip_path: false
+
+  # ── REST API ────────────────────────────────────────────────────────────────
+  - name: ev-rest-api
+    url: http://rest-api:8080
+    routes:
+      - name: rest-api
+        paths: ["/api/v1"]
+        protocols: [http, https]
+
+  # ── Auth service ────────────────────────────────────────────────────────────
+  - name: ev-auth-service
+    url: http://auth-service:8080
+    routes:
+      - name: auth
+        paths: ["/auth"]
+        protocols: [http, https]
+
+  # ── OCPI roaming endpoints ──────────────────────────────────────────────────
+  - name: ev-roaming
+    url: http://roaming:8080
+    routes:
+      - name: ocpi
+        paths: ["/ocpi"]
+        protocols: [http, https]
+
+  # ── Analytics / stats proxy ─────────────────────────────────────────────────
+  - name: ev-analytics
+    url: http://analytics:8080
+    routes:
+      - name: analytics
+        paths: ["/analytics"]
+        protocols: [http, https]

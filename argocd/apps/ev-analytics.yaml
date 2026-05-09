@@ -1,0 +1,31 @@
+# Infrastructure — automated sync (audit logs, statistics, consumption aggregates)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ev-analytics
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: ev-platform
+
+  source:
+    repoURL: https://github.com/itbeans/ev-server
+    targetRevision: main
+    path: scala-services/helm/charts/ev-analytics
+    helm:
+      valueFiles:
+        - ../../../argocd/values/staging.yaml
+        - ../../../argocd/values/image-tags.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ev-platform
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

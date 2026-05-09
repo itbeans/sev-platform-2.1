@@ -1,0 +1,31 @@
+# Phase 2 — automated sync (external polling integrations, low coupling)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ev-asset
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: ev-platform
+
+  source:
+    repoURL: https://github.com/itbeans/ev-server
+    targetRevision: main
+    path: scala-services/helm/charts/ev-asset
+    helm:
+      valueFiles:
+        - ../../../argocd/values/staging.yaml
+        - ../../../argocd/values/image-tags.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ev-platform
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

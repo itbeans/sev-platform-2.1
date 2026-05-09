@@ -1,0 +1,368 @@
+# ---------------------------------------------------------------------------
+# rbac_policy.csv — RBAC policy for ev-server Scala microservices.
+#
+# Derived from AuthorizationsDefinition.ts (TypeScript source of truth).
+#
+# Format:  p, <role>, <resource>, <action>
+#          g, <role>, <parent-role>        (role inheritance)
+#
+# Roles:
+#   SuperAdmin  — full access, no restrictions
+#   Admin       — tenant-wide access; ABAC layer enforces LocalIssuer filter
+#   SiteAdmin   — extends Basic; site management within assigned sites
+#   SiteOwner   — extends Basic; read/report access for owned sites
+#   Basic       — own resources only (OwnUser/AssignedSites ABAC filters)
+#   Demo        — read-only subset (AssignedSites ABAC filter)
+#
+# ABAC filters (LocalIssuer, SitesAdmin, OwnUser, AssignedSites, etc.) are
+# enforced at application layer in CasbinAuthorizationService.buildFilter().
+# This file is purely the RBAC gate (can this role act on this resource at all?).
+# ---------------------------------------------------------------------------
+
+# ── Role inheritance ────────────────────────────────────────────────────────
+g, SiteAdmin, Basic
+g, SiteOwner, Basic
+
+# ── SuperAdmin: unrestricted ─────────────────────────────────────────────────
+p, SuperAdmin, *, *
+
+# ── Admin: tenant-wide access (ABAC handles LocalIssuer restrictions) ────────
+p, Admin, *, *
+
+# ============================================================================
+# SiteAdmin — additional grants on top of Basic (inherited via g, SiteAdmin, Basic)
+# ============================================================================
+
+# Tag — site admin can assign/unassign tags
+p, SiteAdmin, Tag, Assign
+p, SiteAdmin, Tag, Unassign
+p, SiteAdmin, Tag, UpdateByVisualId
+
+# User — site admin can manage users within their sites
+p, SiteAdmin, User, List
+p, SiteAdmin, User, Read
+p, SiteAdmin, User, Create
+p, SiteAdmin, User, Update
+p, SiteAdmin, User, Delete
+p, SiteAdmin, User, SynchronizeBillingUser
+p, SiteAdmin, User, AssignUnassignSites
+
+# UserSite — site-user relationship management
+p, SiteAdmin, UserSite, AssignSitesToUser
+p, SiteAdmin, UserSite, UnassignSitesFromUser
+p, SiteAdmin, UserSite, Read
+p, SiteAdmin, UserSite, Update
+p, SiteAdmin, UserSite, List
+
+# SiteUser — user-site relationship management
+p, SiteAdmin, SiteUser, AssignUsersToSite
+p, SiteAdmin, SiteUser, UnassignUsersFromSite
+p, SiteAdmin, SiteUser, Read
+p, SiteAdmin, SiteUser, Update
+p, SiteAdmin, SiteUser, List
+
+# Site — update/manage assigned sites
+p, SiteAdmin, Site, List
+p, SiteAdmin, Site, Read
+p, SiteAdmin, Site, Update
+p, SiteAdmin, Site, MaintainPricingDefinitions
+p, SiteAdmin, Site, ExportOcppParams
+p, SiteAdmin, Site, AssignUnassignUsers
+
+# SiteArea — full management within assigned sites
+p, SiteAdmin, SiteArea, List
+p, SiteAdmin, SiteArea, Read
+p, SiteAdmin, SiteArea, ReadChargingStationsFromSiteArea
+p, SiteAdmin, SiteArea, Create
+p, SiteAdmin, SiteArea, Update
+p, SiteAdmin, SiteArea, Delete
+p, SiteAdmin, SiteArea, AssignAssets
+p, SiteAdmin, SiteArea, UnassignAssets
+p, SiteAdmin, SiteArea, ReadAssets
+p, SiteAdmin, SiteArea, AssignChargingStations
+p, SiteAdmin, SiteArea, UnassignChargingStations
+p, SiteAdmin, SiteArea, ExportOcppParams
+p, SiteAdmin, SiteArea, GenerateQrCode
+
+# ChargingStation — full OCPP control within assigned sites
+p, SiteAdmin, ChargingStation, List
+p, SiteAdmin, ChargingStation, Read
+p, SiteAdmin, ChargingStation, Update
+p, SiteAdmin, ChargingStation, Delete
+p, SiteAdmin, ChargingStation, Reset
+p, SiteAdmin, ChargingStation, ClearCache
+p, SiteAdmin, ChargingStation, ChangeAvailability
+p, SiteAdmin, ChargingStation, GetConfiguration
+p, SiteAdmin, ChargingStation, ChangeConfiguration
+p, SiteAdmin, ChargingStation, StopTransaction
+p, SiteAdmin, ChargingStation, StartTransaction
+p, SiteAdmin, ChargingStation, Authorize
+p, SiteAdmin, ChargingStation, SetChargingProfile
+p, SiteAdmin, ChargingStation, GetCompositeSchedule
+p, SiteAdmin, ChargingStation, ClearChargingProfile
+p, SiteAdmin, ChargingStation, GetDiagnostics
+p, SiteAdmin, ChargingStation, UpdateFirmware
+p, SiteAdmin, ChargingStation, ExportOcppParams
+p, SiteAdmin, ChargingStation, DataTransfer
+p, SiteAdmin, ChargingStation, RemoteStart
+p, SiteAdmin, ChargingStation, RemoteStop
+p, SiteAdmin, ChargingStation, RemoteStartTransaction
+p, SiteAdmin, ChargingStation, RemoteStopTransaction
+p, SiteAdmin, ChargingStation, UnlockConnector
+p, SiteAdmin, ChargingStation, Export
+p, SiteAdmin, ChargingStation, GetStatusNotification
+p, SiteAdmin, ChargingStation, GetBootNotification
+p, SiteAdmin, ChargingStation, InError
+p, SiteAdmin, ChargingStation, GenerateQrCode
+p, SiteAdmin, ChargingStation, GetConnectorQrCode
+p, SiteAdmin, ChargingStation, MaintainPricingDefinitions
+p, SiteAdmin, ChargingStation, ViewUserData
+p, SiteAdmin, ChargingStation, ReserveNow
+
+# Connector — OCPP connector-level commands
+p, SiteAdmin, Connector, StopTransaction
+p, SiteAdmin, Connector, StartTransaction
+p, SiteAdmin, Connector, RemoteStop
+p, SiteAdmin, Connector, RemoteStart
+p, SiteAdmin, Connector, RemoteStartTransaction
+p, SiteAdmin, Connector, RemoteStopTransaction
+p, SiteAdmin, Connector, ViewUserData
+
+# ChargingProfile — smart charging profiles
+p, SiteAdmin, ChargingProfile, List
+p, SiteAdmin, ChargingProfile, Read
+p, SiteAdmin, ChargingProfile, Create
+p, SiteAdmin, ChargingProfile, Update
+p, SiteAdmin, ChargingProfile, Delete
+
+# Transaction — read/export within site scope
+p, SiteAdmin, Transaction, List
+p, SiteAdmin, Transaction, Read
+p, SiteAdmin, Transaction, GetChargingStationTransactions
+p, SiteAdmin, Transaction, GetActiveTransaction
+p, SiteAdmin, Transaction, GetCompletedTransaction
+p, SiteAdmin, Transaction, GetRefundableTransaction
+p, SiteAdmin, Transaction, GetRefundReport
+p, SiteAdmin, Transaction, ExportCompletedTransaction
+
+# Statistic — site-scoped statistics (both enum names for compatibility)
+p, SiteAdmin, Statistic, Read
+p, SiteAdmin, Statistic, Export
+p, SiteAdmin, Statistics, Read
+p, SiteAdmin, Statistics, Export
+
+# Logging — site-scoped logs
+p, SiteAdmin, Logging, List
+p, SiteAdmin, Logging, Read
+p, SiteAdmin, Logging, Export
+p, SiteAdmin, Log, List
+p, SiteAdmin, Log, Read
+
+# Asset — full management
+p, SiteAdmin, Asset, List
+p, SiteAdmin, Asset, Read
+p, SiteAdmin, Asset, Create
+p, SiteAdmin, Asset, Update
+p, SiteAdmin, Asset, Delete
+p, SiteAdmin, Asset, ReadConsumption
+p, SiteAdmin, Asset, RetrieveConsumption
+p, SiteAdmin, Asset, CreateConsumption
+p, SiteAdmin, Asset, CheckConnection
+
+# PricingDefinition — pricing management for sites
+p, SiteAdmin, PricingDefinition, List
+p, SiteAdmin, PricingDefinition, Read
+p, SiteAdmin, PricingDefinition, Create
+p, SiteAdmin, PricingDefinition, Update
+p, SiteAdmin, PricingDefinition, Delete
+
+# ============================================================================
+# SiteOwner — additional grants on top of Basic
+# ============================================================================
+
+# User — read users within owned sites
+p, SiteOwner, User, List
+p, SiteOwner, User, Read
+
+# UserSite / SiteUser — read-only
+p, SiteOwner, UserSite, Read
+p, SiteOwner, UserSite, List
+p, SiteOwner, SiteUser, Read
+p, SiteOwner, SiteUser, List
+
+# Statistic — owner-scoped statistics
+p, SiteOwner, Statistic, Read
+p, SiteOwner, Statistic, Export
+p, SiteOwner, Statistics, Read
+p, SiteOwner, Statistics, Export
+
+# Transaction — owner-scoped read/export
+p, SiteOwner, Transaction, Read
+p, SiteOwner, Transaction, GetChargingStationTransactions
+p, SiteOwner, Transaction, GetActiveTransaction
+p, SiteOwner, Transaction, GetCompletedTransaction
+p, SiteOwner, Transaction, GetRefundableTransaction
+p, SiteOwner, Transaction, GetRefundReport
+p, SiteOwner, Transaction, ExportCompletedTransaction
+
+# ============================================================================
+# Basic — own data only (OwnUser / AssignedSites ABAC filters applied)
+# ============================================================================
+
+# Own user profile
+p, Basic, User, Read
+p, Basic, User, Update
+
+# Global settings (read-only)
+p, Basic, Setting, Read
+
+# Car catalog (public reference data)
+p, Basic, CarCatalog, List
+p, Basic, CarCatalog, Read
+
+# Own cars
+p, Basic, Car, List
+p, Basic, Car, Read
+p, Basic, Car, Create
+p, Basic, Car, Update
+p, Basic, Car, Delete
+
+# Companies (assigned sites filter)
+p, Basic, Company, List
+p, Basic, Company, Read
+
+# Invoices (own user)
+p, Basic, Invoice, List
+p, Basic, Invoice, Read
+p, Basic, Invoice, Download
+
+# Billing transfer downloads
+p, Basic, BillingTransfer, Download
+
+# Payment methods (own user)
+p, Basic, PaymentMethod, List
+p, Basic, PaymentMethod, Read
+p, Basic, PaymentMethod, Create
+p, Basic, PaymentMethod, Delete
+
+# Sites (assigned sites filter)
+p, Basic, Site, List
+p, Basic, Site, Read
+
+# Site areas (assigned sites filter)
+p, Basic, SiteArea, List
+p, Basic, SiteArea, Read
+p, Basic, SiteArea, ReadChargingStationsFromSiteArea
+
+# Charging stations (assigned sites filter)
+p, Basic, ChargingStation, List
+p, Basic, ChargingStation, Read
+p, Basic, ChargingStation, RemoteStart
+p, Basic, ChargingStation, RemoteStop
+p, Basic, ChargingStation, RemoteStartTransaction
+p, Basic, ChargingStation, RemoteStopTransaction
+p, Basic, ChargingStation, ReserveNow
+p, Basic, ChargingStation, StartTransaction
+p, Basic, ChargingStation, StopTransaction
+p, Basic, ChargingStation, Authorize
+p, Basic, ChargingStation, GetConnectorQrCode
+p, Basic, ChargingStation, PushTransactionCdr
+p, Basic, ChargingStation, ViewUserData
+
+# Connector-level operations (own user / assigned sites)
+p, Basic, Connector, StartTransaction
+p, Basic, Connector, StopTransaction
+p, Basic, Connector, RemoteStop
+p, Basic, Connector, RemoteStart
+p, Basic, Connector, RemoteStartTransaction
+p, Basic, Connector, RemoteStopTransaction
+p, Basic, Connector, ViewUserData
+
+# Own RFID tags
+p, Basic, Tag, List
+p, Basic, Tag, Read
+p, Basic, Tag, Assign
+p, Basic, Tag, Unassign
+p, Basic, Tag, UpdateByVisualId
+
+# Own statistics
+p, Basic, Statistic, Read
+p, Basic, Statistic, Export
+p, Basic, Statistics, Read
+p, Basic, Statistics, Export
+
+# Own transactions
+p, Basic, Transaction, List
+p, Basic, Transaction, Read
+p, Basic, Transaction, GetChargingStationTransactions
+p, Basic, Transaction, GetActiveTransaction
+p, Basic, Transaction, GetCompletedTransaction
+p, Basic, Transaction, GetRefundReport
+
+# Notifications (own user)
+p, Basic, Notification, Read
+p, Basic, Notification, Create
+p, Basic, Notification, Delete
+
+# Asset consumption (assigned sites)
+p, Basic, Asset, List
+p, Basic, Asset, Read
+p, Basic, Asset, ReadConsumption
+
+# ============================================================================
+# Demo — read-only subset (AssignedSites ABAC filter)
+# ============================================================================
+
+# Own user profile (read-only)
+p, Demo, User, Read
+
+# Assets (read-only)
+p, Demo, Asset, List
+p, Demo, Asset, Read
+p, Demo, Asset, ReadConsumption
+
+# Settings
+p, Demo, Setting, Read
+
+# Car catalog
+p, Demo, CarCatalog, List
+p, Demo, CarCatalog, Read
+
+# Cars (read-only)
+p, Demo, Car, List
+p, Demo, Car, Read
+
+# Companies
+p, Demo, Company, List
+p, Demo, Company, Read
+
+# Sites and areas
+p, Demo, Site, List
+p, Demo, Site, Read
+p, Demo, SiteArea, List
+p, Demo, SiteArea, Read
+
+# Charging stations (read-only)
+p, Demo, ChargingStation, List
+p, Demo, ChargingStation, Read
+p, Demo, ChargingStation, GetConnectorQrCode
+p, Demo, ChargingStation, PushTransactionCdr
+
+# Statistics
+p, Demo, Statistic, Read
+p, Demo, Statistic, Export
+p, Demo, Statistics, Read
+p, Demo, Statistics, Export
+
+# Transactions (read-only)
+p, Demo, Transaction, List
+p, Demo, Transaction, Read
+p, Demo, Transaction, GetChargingStationTransactions
+p, Demo, Transaction, GetActiveTransaction
+p, Demo, Transaction, GetCompletedTransaction
+p, Demo, Transaction, GetRefundReport
+
+# Notifications
+p, Demo, Notification, Read
+p, Demo, Notification, Create
+p, Demo, Notification, Delete

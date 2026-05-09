@@ -1,0 +1,52 @@
+# Auto-updated by CI after every successful docker push.
+# DO NOT edit manually — use scripts/update-image-tags.sh or the CI workflow.
+#
+# Each entry overrides `image.tag` in the corresponding Helm chart.
+# ArgoCD detects the commit and syncs automatically (Phase 2/3) or queues
+# the change for manual review (Phase 4).
+
+global:
+  # Set by CI: git rev-parse --short HEAD
+  imageTag: "latest"
+
+# Per-service overrides — populated by CI when a service's source changes.
+# Uncomment and pin a specific SHA to pin a single service independently.
+# ev-notification:
+#   image:
+#     tag: "abc1234"
+# ev-car:
+#   image:
+#     tag: "abc1234"
+# ev-pricing-service:
+#   image:
+#     tag: "abc1234"
+# ev-asset:
+#   image:
+#     tag: "abc1234"
+# ev-auth-service:
+#   image:
+#     tag: "abc1234"
+# ev-roaming:
+#   image:
+#     tag: "abc1234"
+# ev-billing-service:
+#   image:
+#     tag: "abc1234"
+# ev-smart-charging:
+#   image:
+#     tag: "abc1234"
+# ev-rest-api:
+#   image:
+#     tag: "abc1234"
+# ev-ocpp-gateway:
+#   image:
+#     tag: "abc1234"
+# ev-ocpp-processor:
+#   image:
+#     tag: "abc1234"
+# ev-scheduler:
+#   image:
+#     tag: "abc1234"
+# ev-analytics:
+#   image:
+#     tag: "abc1234"

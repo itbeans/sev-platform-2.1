@@ -1,0 +1,14 @@
+# Helm value overrides applied to every service in production.
+# These are layered on top of each chart's default values.yaml.
+
+# Production uses chart defaults for replicaCount and autoscaling.
+
+ingress:
+  enabled: true
+  className: kong
+  annotations:
+    konghq.com/strip-path: "true"
+  tls:
+    - secretName: ev-platform-tls
+      hosts:
+        - "*.ev.example.com"

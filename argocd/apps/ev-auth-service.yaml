@@ -1,0 +1,38 @@
+# Phase 3 — automated sync + selfHeal (60-day parallel run required before cutover)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ev-auth-service
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: ev-platform
+
+  source:
+    repoURL: https://github.com/itbeans/ev-server
+    targetRevision: main
+    path: scala-services/helm/charts/ev-auth-service
+    helm:
+      valueFiles:
+        - ../../../argocd/values/staging.yaml
+        - ../../../argocd/values/image-tags.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ev-platform
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+
+  ignoreDifferences:
+    # JWT signing key is injected at runtime — ignore drift on the secret ref
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/template/spec/containers/0/env

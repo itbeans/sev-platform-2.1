@@ -1,0 +1,265 @@
+syntax = "proto3";
+
+package io.itbeans.ev.billing;
+
+option java_package = "io.itbeans.ev.billing.grpc";
+option java_outer_classname = "BillingServiceProto";
+
+// ---------------------------------------------------------------------------
+// BillingService gRPC — Stripe-backed billing operations.
+//
+// Callers:
+//   - ev-auth-service      (SynchronizeBillingUser on user create/update)
+//   - ev-rest-api          (payment method CRUD, invoice ops, account mgmt)
+//   - ev-ocpp-processor    (CheckTransactionBillingPrerequisites before tx start)
+//
+// Transaction billing lifecycle (startTransaction / updateTransaction /
+// stopTransaction) is driven by Kafka topic `transactions.lifecycle` to
+// avoid synchronous coupling in the hot OCPP path.  Only the prerequisite
+// check is synchronous (gRPC) because a CALLRESULT must be returned to the
+// station within 30 s.
+// ---------------------------------------------------------------------------
+
+service BillingService {
+
+  // ── User billing ──────────────────────────────────────────────────────────
+
+  // Create or update the Stripe customer record for a tenant user.
+  // Called by ev-auth-service whenever a user is created or updated.
+  rpc SynchronizeBillingUser(SynchronizeBillingUserRequest)
+      returns (SynchronizeBillingUserResponse);
+
+  // Admin-initiated full reconciliation of a user's billing state.
+  // Corresponds to the ForceSynchronize action.
+  rpc ForceSynchronizeUser(ForceSynchronizeUserRequest)
+      returns (ForceSynchronizeUserResponse);
+
+  // ── Transaction pre-check ─────────────────────────────────────────────────
+
+  // Validate that a user meets all billing prerequisites before a charging
+  // session is allowed to start (e.g. has a valid payment method).
+  // Called synchronously by ev-ocpp-processor during OCPP Authorize / OCPP
+  // TransactionEvent(eventType=Started).
+  rpc CheckTransactionBillingPrerequisites(CheckTransactionBillingPrerequisitesRequest)
+      returns (CheckTransactionBillingPrerequisitesResponse);
+
+  // ── Payment methods ───────────────────────────────────────────────────────
+
+  // Attach a payment method to the user's Stripe customer and optionally set
+  // it as default.  The paymentMethodId comes from Stripe.js on the client.
+  // Corresponds to BillingSetupPaymentMethod action.
+  rpc SetupPaymentMethod(SetupPaymentMethodRequest)
+      returns (SetupPaymentMethodResponse);
+
+  // Detach and delete a payment method.
+  // Corresponds to BillingDeletePaymentMethod action.
+  rpc DeletePaymentMethod(DeletePaymentMethodRequest)
+      returns (DeletePaymentMethodResponse);
+
+  // List all saved payment methods for a user.
+  rpc GetPaymentMethods(GetPaymentMethodsRequest)
+      returns (GetPaymentMethodsResponse);
+
+  // ── Invoices ──────────────────────────────────────────────────────────────
+
+  // Immediately attempt to collect payment on an open invoice.
+  // Corresponds to BillingChargeInvoice action.
+  rpc ChargeInvoice(ChargeInvoiceRequest) returns (ChargeInvoiceResponse);
+
+  // Download the PDF for a billing invoice.
+  // Returns a signed CDN URL when available; falls back to raw bytes.
+  rpc DownloadInvoice(DownloadInvoiceRequest) returns (DownloadInvoiceResponse);
+
+  // ── Billing accounts (Stripe Connect) ─────────────────────────────────────
+
+  // Create a Stripe Connect account for a site owner and return the
+  // onboarding URL.  Corresponds to BillingAccountOnboard action.
+  rpc OnboardBillingAccount(OnboardBillingAccountRequest)
+      returns (OnboardBillingAccountResponse);
+
+  // Refresh / re-activate a connected account (e.g. after Stripe requirements
+  // expire).  Corresponds to BillingAccountActivate action.
+  rpc ActivateBillingAccount(ActivateBillingAccountRequest)
+      returns (ActivateBillingAccountResponse);
+
+  // ── Transfers ─────────────────────────────────────────────────────────────
+
+  // Close a billing transfer and generate the platform-fee invoice.
+  // Corresponds to BillingFinalizeTransfer action.
+  rpc FinalizeTransfer(FinalizeTransferRequest) returns (FinalizeTransferResponse);
+
+  // Disburse a finalized transfer to the site owner's connected account.
+  // Corresponds to BillingSendTransfer action.
+  rpc SendTransfer(SendTransferRequest) returns (SendTransferResponse);
+}
+
+// ── User billing messages ──────────────────────────────────────────────────
+
+message SynchronizeBillingUserRequest {
+  string tenant_id = 1;
+  string user_id   = 2;
+}
+
+message SynchronizeBillingUserResponse {
+  bool   success             = 1;
+  string billing_customer_id = 2;  // Stripe customer ID assigned or confirmed
+  string error               = 3;  // empty on success
+}
+
+message ForceSynchronizeUserRequest {
+  string tenant_id = 1;
+  string user_id   = 2;
+}
+
+message ForceSynchronizeUserResponse {
+  bool   success = 1;
+  string error   = 2;
+}
+
+// ── Transaction pre-check messages ────────────────────────────────────────
+
+message CheckTransactionBillingPrerequisitesRequest {
+  string tenant_id           = 1;
+  string user_id             = 2;
+  string charging_station_id = 3;
+}
+
+message CheckTransactionBillingPrerequisitesResponse {
+  bool            can_start   = 1;
+  // StartTransactionErrorCode values when can_start is false, e.g.
+  // "NO_BILLING_DATA", "NO_PAYMENT_METHOD", "ACCOUNT_DEACTIVATED"
+  repeated string error_codes = 2;
+}
+
+// ── Payment method messages ────────────────────────────────────────────────
+
+message SetupPaymentMethodRequest {
+  string tenant_id         = 1;
+  string user_id           = 2;
+  // Stripe PaymentMethod ID obtained via Stripe.js on the client side
+  string payment_method_id = 3;
+}
+
+message SetupPaymentMethodResponse {
+  bool   success       = 1;
+  // Populated when Stripe requires an additional confirmation step
+  string client_secret = 2;
+  string error         = 3;
+}
+
+message DeletePaymentMethodRequest {
+  string tenant_id         = 1;
+  string user_id           = 2;
+  string payment_method_id = 3;
+}
+
+message DeletePaymentMethodResponse {
+  bool   success = 1;
+  string error   = 2;
+}
+
+message GetPaymentMethodsRequest {
+  string tenant_id = 1;
+  string user_id   = 2;
+}
+
+message PaymentMethod {
+  string id         = 1;
+  string brand      = 2;   // visa, mastercard, amex, etc.
+  int32  exp_month  = 3;
+  int32  exp_year   = 4;
+  string last4      = 5;
+  string type       = 6;   // card, sepa_debit, etc.
+  bool   is_default = 7;
+  int64  created_on = 8;   // Unix epoch millis
+}
+
+message GetPaymentMethodsResponse {
+  repeated PaymentMethod payment_methods = 1;
+}
+
+// ── Invoice messages ───────────────────────────────────────────────────────
+
+message ChargeInvoiceRequest {
+  string tenant_id  = 1;
+  string invoice_id = 2;   // internal MongoDB _id
+  string user_id    = 3;   // admin user performing the action (for audit)
+}
+
+message ChargeInvoiceResponse {
+  bool   success        = 1;
+  // Resulting Stripe invoice status: paid, open, uncollectible, void
+  string invoice_status = 2;
+  string error          = 3;
+}
+
+message DownloadInvoiceRequest {
+  string tenant_id  = 1;
+  string invoice_id = 2;
+}
+
+message DownloadInvoiceResponse {
+  bool   found        = 1;
+  // Signed CDN / Stripe-hosted URL — preferred; non-empty when available
+  string download_url = 2;
+  // Raw PDF bytes as fallback when no hosted URL is available (may be large)
+  bytes  pdf_content  = 3;
+}
+
+// ── Billing account messages ───────────────────────────────────────────────
+
+message OnboardBillingAccountRequest {
+  string tenant_id         = 1;
+  string business_owner_id = 2;   // user_id of the site owner
+  string return_url        = 3;   // redirect URL after Stripe onboarding flow
+}
+
+message OnboardBillingAccountResponse {
+  bool   success         = 1;
+  string account_id      = 2;   // internal MongoDB billing account _id
+  // Stripe Connect account onboarding URL — redirect the user here
+  string activation_link = 3;
+  string error           = 4;
+}
+
+message ActivateBillingAccountRequest {
+  string tenant_id  = 1;
+  string account_id = 2;
+  string return_url = 3;
+}
+
+message ActivateBillingAccountResponse {
+  bool   success         = 1;
+  // Current account status: active | pending | idle
+  string status          = 2;
+  // New activation link when additional Stripe steps are still required
+  string activation_link = 3;
+  string error           = 4;
+}
+
+// ── Transfer messages ──────────────────────────────────────────────────────
+
+message FinalizeTransferRequest {
+  string tenant_id   = 1;
+  string transfer_id = 2;   // internal MongoDB billing transfer _id
+}
+
+message FinalizeTransferResponse {
+  bool   success = 1;
+  // Resulting transfer status: finalized
+  string status  = 2;
+  string error   = 3;
+}
+
+message SendTransferRequest {
+  string tenant_id   = 1;
+  string transfer_id = 2;
+}
+
+message SendTransferResponse {
+  bool   success              = 1;
+  string transfer_external_id = 2;   // Stripe transfer ID
+  // Resulting transfer status: transferred
+  string status               = 3;
+  string error                = 4;
+}

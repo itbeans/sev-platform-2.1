@@ -1,0 +1,163 @@
+{
+  "title": "OCPP Gateway — Station Connections",
+  "uid": "ocpp-gateway-detail",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "tenant",
+        "type": "query",
+        "label": "Tenant",
+        "datasource": "Prometheus",
+        "query": "label_values(ocpp_gateway_active_connections, tenant_id)",
+        "multi": true,
+        "includeAll": true
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Total Active Stations",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 3 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "sum(ocpp_gateway_active_connections{tenant_id=~'$tenant'})", "legendFormat": "Stations" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "New Connections / s",
+      "type": "stat",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 3 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "sum(rate(ocpp_gateway_connections_total[1m]))", "legendFormat": "conn/s" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Connection Drops / s",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 3 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "sum(rate(ocpp_gateway_disconnections_total[1m]))", "legendFormat": "drops/s" }
+      ],
+      "options": {
+        "thresholds": {
+          "steps": [
+            { "color": "green",  "value": null },
+            { "color": "yellow", "value": 1 },
+            { "color": "red",    "value": 5 }
+          ]
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "OCPP Protocol Version Distribution",
+      "type": "piechart",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 3 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "sum(ocpp_gateway_active_connections) by (ocpp_version)", "legendFormat": "{{ocpp_version}}" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Pod Connection Distribution (sticky routing health)",
+      "type": "bargauge",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 3 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "ocpp_gateway_active_connections", "legendFormat": "{{pod}}" }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Active Connections Over Time",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 3, "w": 24, "h": 6 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(ocpp_gateway_active_connections{tenant_id=~'$tenant'}) by (pod)",
+          "legendFormat": "{{pod}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "BootNotification Accept Rate (%)",
+      "type": "gauge",
+      "gridPos": { "x": 0, "y": 9, "w": 6, "h": 4 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "100 * sum(rate(ocpp_messages_total{action='BootNotification',status='Accepted'}[5m])) / sum(rate(ocpp_messages_total{action='BootNotification'}[5m]))",
+          "legendFormat": "Accept %"
+        }
+      ],
+      "options": {
+        "thresholds": {
+          "steps": [
+            { "color": "red",    "value": null },
+            { "color": "yellow", "value": 95 },
+            { "color": "green",  "value": 99 }
+          ]
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Message Processing Latency (ms) — p50 / p95 / p99",
+      "type": "timeseries",
+      "gridPos": { "x": 6, "y": 9, "w": 18, "h": 4 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(ocpp_response_duration_ms_bucket[1m])) by (le))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(ocpp_response_duration_ms_bucket[1m])) by (le))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(ocpp_response_duration_ms_bucket[1m])) by (le))",
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 5000 },
+              { "color": "red",    "value": 25000 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "Messages by Action Type (rate/s)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 13, "w": 24, "h": 6 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(ocpp_messages_received_total[1m])) by (action)",
+          "legendFormat": "{{action}}"
+        }
+      ]
+    }
+  ]
+}

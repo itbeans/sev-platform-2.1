@@ -1,0 +1,98 @@
+syntax = "proto3";
+
+package io.itbeans.ev.smartcharging;
+
+option java_package = "io.itbeans.ev.smartcharging.grpc";
+option java_outer_classname = "SmartChargingServiceProto";
+
+// ---------------------------------------------------------------------------
+// SmartChargingService gRPC — optimal charging profile computation and
+// application via SAP Smart Charging (or other providers).
+//
+// Callers:
+//   - ev-rest-api           (TriggerSmartCharging, CheckConnection dashboard)
+//   - ev-ocpp-processor     (TriggerSmartCharging on TransactionEvent start/stop
+//                            when smart charging is enabled for the site area)
+//
+// The service internally calls ev-ocpp-gateway's SendCommand RPC to push
+// SetChargingProfile / ClearChargingProfile OCPP commands to stations after
+// computing the optimal allocation.
+//
+// Heavy recomputation cycles are also triggered via Kafka topic
+// `smart-charging.triggers` so the OCPP hot path is not blocked.
+// ---------------------------------------------------------------------------
+
+service SmartChargingService {
+
+  // Compute and apply optimal charging profiles for all active transactions in
+  // a site area.  Calls the configured smart charging provider (SAP), then
+  // sends SetChargingProfile via ev-ocpp-gateway for each affected station.
+  // Corresponds to TriggerSmartCharging action.
+  rpc TriggerSmartCharging(TriggerSmartChargingRequest)
+      returns (TriggerSmartChargingResponse);
+
+  // Verify connectivity to the configured smart charging provider.
+  // Corresponds to CheckConnection action.
+  rpc CheckConnection(CheckConnectionRequest) returns (CheckConnectionResponse);
+
+  // Compute charging profiles for a site area without applying them.
+  // Used for dry-run previews and debugging; does not call the OCPP Gateway.
+  rpc BuildChargingProfiles(BuildChargingProfilesRequest)
+      returns (BuildChargingProfilesResponse);
+}
+
+// ── TriggerSmartCharging ──────────────────────────────────────────────────
+
+message TriggerSmartChargingRequest {
+  string tenant_id    = 1;
+  string site_area_id = 2;
+  // When true, retries the optimiser call once on HTTP 5xx from SAP.
+  // Mirrors the `retry` flag on SmartChargingIntegration.computeAndApplyChargingProfiles.
+  bool   retry        = 3;
+}
+
+message TriggerSmartChargingResponse {
+  bool   success          = 1;
+  // Number of stations that received a new SetChargingProfile command
+  int32  profiles_applied = 2;
+  // Number of stations for which profile delivery failed
+  int32  profiles_failed  = 3;
+  string error            = 4;  // empty on success
+}
+
+// ── CheckConnection ───────────────────────────────────────────────────────
+
+message CheckConnectionRequest {
+  string tenant_id = 1;
+}
+
+message CheckConnectionResponse {
+  bool   connected = 1;
+  string error     = 2;  // provider-level error message when not connected
+}
+
+// ── BuildChargingProfiles (dry run) ───────────────────────────────────────
+
+message BuildChargingProfilesRequest {
+  string tenant_id    = 1;
+  string site_area_id = 2;
+  // Station IDs to exclude from the optimisation (e.g. stations in error state)
+  repeated string excluded_station_ids = 3;
+}
+
+// A single computed charging profile ready to be sent as SetChargingProfile.
+message ChargingProfileResult {
+  string charging_station_id   = 1;
+  // Connector 0 = station-wide limit; > 0 = specific connector
+  int32  connector_id          = 2;
+  // JSON-encoded OCPP ChargingProfile payload (OCPP 1.6 / 2.0.1 / 2.1 format)
+  // ready to embed in a SetChargingProfile.req payload.
+  string charging_profile_json = 3;
+  // Limit in Watts assigned to this connector by the optimiser
+  double limit_watts           = 4;
+}
+
+message BuildChargingProfilesResponse {
+  repeated ChargingProfileResult profiles = 1;
+  string error                            = 2;
+}

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ev-roaming
+description: OCPI 2.1.1 and OICP 2.3.0 EV roaming — CDR exchange with external networks
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

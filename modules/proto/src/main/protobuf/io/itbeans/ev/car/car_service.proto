@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package io.itbeans.ev.car;
+
+option java_package = "io.itbeans.ev.car.grpc";
+option java_outer_classname = "CarServiceProto";
+
+// ---------------------------------------------------------------------------
+// CarService gRPC — called synchronously by ev-ocpp-processor during
+// TransactionEvent to get the user's default car and its current SoC.
+//
+// Callers:
+//   - ev-ocpp-processor  (TransactionEventHandler → get car for smart charging)
+//   - ev-rest-api        (car management endpoints)
+// ---------------------------------------------------------------------------
+
+service CarService {
+  // Get the default car for a user (used during OCPP TransactionEvent).
+  rpc GetUserDefaultCar(GetUserDefaultCarRequest) returns (GetUserDefaultCarResponse);
+
+  // Get current state of charge from car connector (Mercedes, Tronity, Targa).
+  rpc GetCurrentSoC(GetCurrentSoCRequest) returns (GetCurrentSoCResponse);
+}
+
+message GetUserDefaultCarRequest {
+  string tenant_id = 1;
+  string user_id   = 2;
+}
+
+message GetUserDefaultCarResponse {
+  bool   found           = 1;
+  string car_id          = 2;
+  int32  car_catalog_id  = 3;
+  string vin             = 4;
+  string license_plate   = 5;
+  // Converter info for smart charging power calculation
+  double converter_power_watts       = 6;
+  double converter_amperage_phase    = 7;
+  int32  converter_number_of_phases  = 8;
+}
+
+message GetCurrentSoCRequest {
+  string tenant_id = 1;
+  string car_id    = 2;
+}
+
+message GetCurrentSoCResponse {
+  bool  found = 1;
+  int32 soc   = 2;  // 0–100 %
+}

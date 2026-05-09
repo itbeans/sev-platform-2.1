@@ -1,0 +1,46 @@
+image:
+  repository: ghcr.io/itbeans/ev-ocpp-processor
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  type: ClusterIP
+  httpPort: 8080   # health + metrics only
+  grpcPort: 0
+  wsPort: 0
+  sessionAffinity: None
+
+ingress:
+  enabled: false
+  className: kong
+  annotations: {}
+  hosts: []
+  tls: []
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 65
+
+env:
+  # Cross-service gRPC — env var names match application.conf ${?ENV_VAR} bindings
+  AUTH_GRPC_HOST: "ev-auth-service"
+  AUTH_GRPC_PORT: "9090"
+  PRICING_GRPC_HOST: "ev-pricing-service"
+  PRICING_GRPC_PORT: "9090"
+  OCPP_GATEWAY_GRPC_HOST: "ev-ocpp-gateway"
+  OCPP_GATEWAY_GRPC_PORT: "9090"
+
+envFromSecrets:
+  - ev-ocpp-processor-secrets   # MONGODB_URI, KAFKA_BOOTSTRAP_SERVERS

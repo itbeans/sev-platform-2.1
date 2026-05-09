@@ -1,0 +1,42 @@
+image:
+  repository: ghcr.io/itbeans/ev-asset
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  type: ClusterIP
+  httpPort: 8080
+  grpcPort: 0
+  wsPort: 0
+  sessionAffinity: None
+
+ingress:
+  enabled: false
+  className: kong
+  annotations: {}
+  hosts: []
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 300m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+
+env:
+  LOG_LEVEL: "INFO"
+  # Polling interval for asset consumption data
+  ASSET_POLL_INTERVAL_SECONDS: "60"
+
+envFromSecrets:
+  - ev-asset-secrets   # MONGO_URI, KAFKA_BOOTSTRAP, external asset API keys

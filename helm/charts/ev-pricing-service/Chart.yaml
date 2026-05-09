@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ev-pricing-service
+description: Tariff engine — pricing resolution and session cost computation
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

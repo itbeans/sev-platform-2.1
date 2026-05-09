@@ -1,0 +1,30 @@
+# Phase 4 — MANUAL sync (OCPP business logic; must migrate after gateway)
+# Kafka consumer lag on ocpp.events is a P1 operational metric — monitor before cutover.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ev-ocpp-processor
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: ev-platform
+
+  source:
+    repoURL: https://github.com/itbeans/ev-server
+    targetRevision: main
+    path: scala-services/helm/charts/ev-ocpp-processor
+    helm:
+      valueFiles:
+        - ../../../argocd/values/staging.yaml
+        - ../../../argocd/values/image-tags.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ev-platform
+
+  # No syncPolicy.automated — operator must run `argocd app sync ev-ocpp-processor`
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
