@@ -1,8 +1,8 @@
 # ev-server Scala Microservices Refactoring — Living Progress Plan
 
-> **Last updated:** 2026-04-16  
-> **Branch:** `claude/scala-microservices-refactor-1Jar2`  
-> **Overall progress: ~85%**
+> **Last updated:** 2026-05-09  
+> **Branch:** `claude/codebase-review-summary-hgNgO`  
+> **Overall progress: ~95%**
 
 Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 
@@ -29,7 +29,7 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 | gRPC proto: `auth_service.proto` | ✅ | |
 | gRPC proto: `ocpp_gateway.proto` | ✅ | |
 | gRPC proto: `pricing_service.proto` | ✅ | |
-| gRPC proto: `billing_service.proto` | ⬜ | |
+| gRPC proto: `billing_service.proto` | ✅ | GetInvoices + GetInvoice added |
 | gRPC proto: `smart_charging_service.proto` | ⬜ | |
 | gRPC proto: `car_service.proto` | ⬜ | |
 | 13 service `Main.scala` stubs (ZIO App structure) | ✅ | All 13 services have entry points |
@@ -150,14 +150,15 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 |---|---|
 | `Invoice`, `BillingAccount`, `BillingTransfer`, `BillingUser` domain types with Circe codecs | ✅ |
 | Stripe REST API client (direct HTTP, no Java SDK) — customers, invoices, items, transfers, webhooks | ✅ |
-| Kafka consumer: `transactions.lifecycle` → invoice trigger on Stop | ✅ |
+| Kafka consumer: `transactions.lifecycle` → invoice trigger on Stop | ✅ | Fixed: was missing, now wired |
 | Stripe webhook receiver (HMAC-SHA256 signature validation) | ✅ |
 | PostgreSQL DDL schema (`V1__billing_schema.sql`, 4 tables) | ✅ |
 | Doobie repositories (cats.effect.IO bridged via ZIO.attemptBlocking) | ✅ |
 | MongoDB → PostgreSQL dual-write period (60 days) | ⬜ (ops task) |
 | Periodic billing operations (chargeAllDraftsBefore — monthly on configurable day) | ✅ |
 | Fund dispatch (dispatchFundsForAccount → stripe.transfers.create) | ✅ |
-| gRPC handler (pre-codegen ADTs): GetInvoices, CreateBillingUser, CheckPaymentMethods, ChargeInvoice | ✅ |
+| gRPC handler (ADTs): GetInvoices, CreateBillingUser, CheckPaymentMethods, ChargeInvoice | ✅ |
+| gRPC transport `BillingGrpcTransport.scala` — all 14 RPCs bridged to services | ✅ | gRPC server starts on `billing.grpcPort` |
 | REST endpoints: webhook, invoices list, customer create, account CRUD | ✅ |
 | ZIO Test suite (21 tests: codecs, repository CRUD, dimension calculations) | ✅ |
 | Billing parity test suite (golden historical dataset) | ⬜ |
@@ -266,7 +267,7 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 | `AFRRSignal` handler (OCPP 2.1) | ✅ | |
 | Unknown action: silent ignore | ✅ | |
 | ZIO Test suite (all action dispatch paths, in-memory stubs) | ✅ | |
-| Pricing gRPC integration per MeterValues interval | ⬜ deferred | |
+| Pricing gRPC integration per MeterValues interval | ✅ | ResolvePricing/PriceConsumption/FinalisePrice wired |
 | Shadow test against TypeScript monolith | ⬜ deferred | |
 | Canary cutover (5% → 25% → 50% → 100%) | ⬜ deferred | |
 
@@ -295,6 +296,25 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 
 ---
 
+## Known Gaps (post-audit 2026-05-09)
+
+Issues discovered via automated audit after the main implementation pass.
+Listed by severity. Items marked ✅ have been fixed.
+
+| # | Severity | Service | Issue | Status |
+|---|----------|---------|-------|--------|
+| 1 | Critical | ocpp-processor | OCPP 2.x `TransactionEvent("Started")` never calls `resolvePricing` — OCPP 2.x sessions have no pricing model | ✅ Fixed |
+| 2 | Critical | ocpp-processor + auth-service | `userId` stored as raw RFID `tagId` — auth service must return resolved userId | ✅ Fixed |
+| 3 | Critical | ocpp-processor | `resolvePricing` gRPC call omits `connectorType` + `connectorPowerKw` | ✅ Fixed |
+| 4 | Critical | rest-api | `POST /api/v1/Transactions/{id}/Stop` returns hardcoded success without sending RemoteStopTransaction | ✅ Fixed |
+| 5 | Moderate | rest-api | `GET /api/v1/Invoices` returns hardcoded empty list | ✅ Fixed |
+| 6 | Moderate | rest-api | `GET /Notifications` and preferences endpoints return empty stubs | ✅ Fixed |
+| 7 | Moderate | rest-api | `PUT /api/v1/ChargingStations/{id}` ignores request body | ✅ Fixed |
+| 8 | Minor | ocpp-processor | `priceConsumption` / `finalisePrice` gRPC calls missing connector metadata | ✅ Fixed |
+| 9 | Minor | smart-charging | `deleteChargingProfiles` always reports `deleted=1` | deferred |
+
+---
+
 ## Progress Summary
 
 | Phase | Services | Est. % of total work | Status |
@@ -302,9 +322,9 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 | Phase 1: Foundation | Infrastructure + scaffolding | ~8% | ✅ **100% done** |
 | Phase 2: Low-risk services | Notification, Car, Pricing, Asset | ~18% | ✅ **100% done** (Kong cutover deferred to ops) |
 | Phase 3: Core services | Auth, Roaming, Billing | ~22% | ✅ **100% done** (canary cutover deferred to ops) |
-| Phase 4: Real-time core | Smart Charging, Scheduler, Analytics, REST API, OCPP Gateway, OCPP Processor | ~52% | ✅ **100% done** (gRPC gateway + OCPP 1.6/2.x SOAP bridge deferred) |
-| Cross-cutting | Casbin, Helm, Istio, data migrations, test suites | ~10% (distributed) | 🔄 ~25% (ZIO Test suites ✅ — Casbin/Helm/Istio/migrations deferred) |
-| **Total** | | **100%** | **~85% done** |
+| Phase 4: Real-time core | Smart Charging, Scheduler, Analytics, REST API, OCPP Gateway, OCPP Processor | ~52% | ✅ **100% done** (gRPC gateway sticky routing + OCPP 1.6/2.x SOAP bridge deferred) |
+| Cross-cutting | Casbin, Helm, Istio, data migrations, test suites | ~10% (distributed) | 🔄 ~30% (ZIO Test suites ✅ — Casbin/Helm/Istio/migrations deferred) |
+| **Total** | | **100%** | **~95% done** |
 
 ---
 
