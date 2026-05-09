@@ -57,7 +57,7 @@ object TransactionEndpoints:
     .out(header[String]("Content-Type"))
     .out(byteArrayBody)
 
-  def routes(repo: RestApiRepository): List[ZServerEndpoint[Any, Any]] = List(
+  def routes(repo: RestApiRepository, gateway: OcppGatewayGrpcClient): List[ZServerEndpoint[Any, Any]] = List(
     listEp.zServerLogic { case (tenantId, inProgress, limit, skip, stationId, userId, from, to) =>
       repo.listTransactions(tenantId, limit.getOrElse(25), skip.getOrElse(0), inProgress, stationId, userId)
         .map(pr => TransactionsResponse(pr.result, pr.count))
@@ -72,7 +72,20 @@ object TransactionEndpoints:
       repo.deleteTransaction(tenantId, id).mapError(_.getMessage).unit
     },
     stopEp.zServerLogic { case (id, tenantId) =>
-      ZIO.succeed(io.circe.Json.obj("status" -> io.circe.Json.fromString("Stopped")))
+      repo.getTransaction(tenantId, id)
+        .flatMap {
+          case None => ZIO.fail(s"Transaction $id not found")
+          case Some(tx) =>
+            val payload = io.circe.Json.obj("transactionId" -> io.circe.Json.fromLong(id)).noSpaces
+            gateway
+              .sendCommand(tenantId, tx.chargingStationId.value, "RemoteStopTransaction", payload)
+              .as(io.circe.Json.obj("status" -> io.circe.Json.fromString("Accepted")))
+              .catchAll { err =>
+                ZIO.logWarning(s"[RestApi] RemoteStopTransaction failed for tx $id: ${err.getMessage}") *>
+                  ZIO.fail(s"Gateway error for tx $id: ${err.getMessage}")
+              }
+        }
+        .mapError(_.toString)
     },
     exportEp.zServerLogic { case (tenantId, inProgress, stationId) =>
       repo.listTransactions(tenantId, limit = 10000, skip = 0, inProgress, stationId, userId = None)

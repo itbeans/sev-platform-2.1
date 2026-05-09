@@ -191,6 +191,16 @@ final class BillingGrpcClient(stub: BillingServiceGrpc.BillingServiceStub):
       stub.downloadInvoice(DownloadInvoiceRequest(tenantId = tenantId, invoiceId = invoiceId))
     )
 
+  def getInvoices(tenantId: String, userId: String, limit: Int, skip: Int): Task[GetInvoicesResponse] =
+    ZIO.fromFuture(implicit ec =>
+      stub.getInvoices(GetInvoicesRequest(tenantId = tenantId, userId = userId, limit = limit, skip = skip))
+    )
+
+  def getInvoice(tenantId: String, invoiceId: String): Task[GetInvoiceResponse] =
+    ZIO.fromFuture(implicit ec =>
+      stub.getInvoice(GetInvoiceRequest(tenantId = tenantId, invoiceId = invoiceId))
+    )
+
 object BillingGrpcClient:
 
   val live: ZLayer[RestApiConfig, Nothing, BillingGrpcClient] =

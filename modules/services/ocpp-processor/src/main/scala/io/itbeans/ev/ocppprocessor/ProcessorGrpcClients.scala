@@ -118,9 +118,9 @@ object ProcessorGatewayClient:
 // ── Pricing client ────────────────────────────────────────────────────────────
 
 trait ProcessorPricingClient:
-  def resolvePricing(tenantId: String, stationId: String, connectorId: String, userId: String, startTimestampMs: Long): Task[ResolvePricingResponse]
-  def priceConsumption(tenantId: String, txId: String, pricingModelJson: String, consumptionWh: Double, instantWatts: Double, intervalStartMs: Long, intervalEndMs: Long): Task[PriceConsumptionResponse]
-  def finalisePrice(tenantId: String, txId: String, pricingModelJson: String, totalConsumptionWh: Double, startTimestampMs: Long, endTimestampMs: Long): Task[FinalisePriceResponse]
+  def resolvePricing(tenantId: String, stationId: String, connectorId: String, connectorType: String, connectorPowerKw: Double, userId: String, startTimestampMs: Long): Task[ResolvePricingResponse]
+  def priceConsumption(tenantId: String, txId: String, pricingModelJson: String, consumptionWh: Double, instantWatts: Double, connectorType: String, connectorPowerKw: Double, intervalStartMs: Long, intervalEndMs: Long): Task[PriceConsumptionResponse]
+  def finalisePrice(tenantId: String, txId: String, pricingModelJson: String, totalConsumptionWh: Double, connectorType: String, connectorPowerKw: Double, startTimestampMs: Long, endTimestampMs: Long): Task[FinalisePriceResponse]
 
 final class LiveProcessorPricingClient(stub: PricingServiceGrpc.PricingServiceStub)
     extends ProcessorPricingClient:
@@ -129,6 +129,8 @@ final class LiveProcessorPricingClient(stub: PricingServiceGrpc.PricingServiceSt
       tenantId: String,
       stationId: String,
       connectorId: String,
+      connectorType: String,
+      connectorPowerKw: Double,
       userId: String,
       startTimestampMs: Long
   ): Task[ResolvePricingResponse] =
@@ -140,7 +142,9 @@ final class LiveProcessorPricingClient(stub: PricingServiceGrpc.PricingServiceSt
           connectorId = connectorId,
           userId = userId,
           tagId = userId,
-          startTimestamp = startTimestampMs
+          startTimestamp = startTimestampMs,
+          connectorType = connectorType,
+          connectorPowerKw = connectorPowerKw
         )
       )
     )
@@ -151,6 +155,8 @@ final class LiveProcessorPricingClient(stub: PricingServiceGrpc.PricingServiceSt
       pricingModelJson: String,
       consumptionWh: Double,
       instantWatts: Double,
+      connectorType: String,
+      connectorPowerKw: Double,
       intervalStartMs: Long,
       intervalEndMs: Long
   ): Task[PriceConsumptionResponse] =
@@ -163,7 +169,9 @@ final class LiveProcessorPricingClient(stub: PricingServiceGrpc.PricingServiceSt
           consumptionWh = consumptionWh,
           instantWatts = instantWatts,
           intervalStart = intervalStartMs,
-          intervalEnd = intervalEndMs
+          intervalEnd = intervalEndMs,
+          connectorType = connectorType,
+          connectorPowerKw = connectorPowerKw
         )
       )
     )
@@ -173,6 +181,8 @@ final class LiveProcessorPricingClient(stub: PricingServiceGrpc.PricingServiceSt
       txId: String,
       pricingModelJson: String,
       totalConsumptionWh: Double,
+      connectorType: String,
+      connectorPowerKw: Double,
       startTimestampMs: Long,
       endTimestampMs: Long
   ): Task[FinalisePriceResponse] =
@@ -184,7 +194,9 @@ final class LiveProcessorPricingClient(stub: PricingServiceGrpc.PricingServiceSt
           pricingModelJson = pricingModelJson,
           totalConsumptionWh = totalConsumptionWh,
           startTimestamp = startTimestampMs,
-          endTimestamp = endTimestampMs
+          endTimestamp = endTimestampMs,
+          connectorType = connectorType,
+          connectorPowerKw = connectorPowerKw
         )
       )
     )

@@ -55,6 +55,9 @@ trait ProcessorRepository:
   /** Get a running transaction (to check if it exists before creating). */
   def getTransaction(tenantId: String, transactionId: String): Task[Option[Document]]
 
+  /** Get a charging station document (for connector type / power lookup). */
+  def getStation(tenantId: String, stationId: String): Task[Option[Document]]
+
   // ── Consumptions ──────────────────────────────────────────────────────────
   /** Append a meter-value reading row (also published to Kafka for ev-analytics). */
   def insertConsumption(tenantId: String, doc: Document): Task[Unit]
@@ -150,6 +153,11 @@ final class MongoProcessorRepository(db: MongoDatabase) extends ProcessorReposit
   def getTransaction(tenantId: String, transactionId: String): Task[Option[Document]] =
     ZIO.fromFuture { _ =>
       col(tenantId, "transactions").find(equal("_id", transactionId)).headOption()
+    }
+
+  def getStation(tenantId: String, stationId: String): Task[Option[Document]] =
+    ZIO.fromFuture { _ =>
+      col(tenantId, "chargingstations").find(equal("_id", stationId)).headOption()
     }
 
   def insertConsumption(tenantId: String, doc: Document): Task[Unit] =

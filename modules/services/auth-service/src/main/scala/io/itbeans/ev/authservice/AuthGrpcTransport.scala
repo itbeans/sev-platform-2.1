@@ -37,7 +37,13 @@ final class AuthGrpcTransport(handler: AuthGrpcHandler, rt: Runtime[Any])
             chargingStationId = req.chargingStationId
           )
         )
-        .map(r => OcppAuthorizationResponse(status = r.status))
+        .map { r =>
+          val userId = r.userJson
+            .flatMap(json => io.circe.parser.parse(json).toOption)
+            .flatMap(_.hcursor.downField("id").as[String].toOption)
+            .getOrElse("")
+          OcppAuthorizationResponse(status = r.status, userId = userId)
+        }
     )
 
   override def resolveTenant(req: ResolveTenantRequest): Future[ResolveTenantResponse] =

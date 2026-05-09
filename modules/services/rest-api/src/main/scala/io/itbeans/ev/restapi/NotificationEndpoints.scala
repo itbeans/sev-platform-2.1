@@ -59,17 +59,42 @@ object NotificationEndpoints:
     .in(jsonBody[io.circe.Json])
     .out(jsonBody[io.circe.Json])
 
+  private def docToNotification(doc: org.bson.Document): Option[Notification] =
+    for
+      id     <- Option(doc.getString("_id"))
+      userId <- Option(doc.getString("userId"))
+    yield Notification(
+      id = id,
+      tenantId = Option(doc.getString("tenantId")).getOrElse(""),
+      userId = userId,
+      channel = Option(doc.getString("channel")).getOrElse("Push"),
+      sourceDescriptor = Option(doc.getString("sourceDescriptor")).getOrElse(""),
+      chargeBoxID = Option(doc.getString("chargeBoxID")),
+      timestamp = Option(doc.get("timestamp")).flatMap(v => v.toString.toLongOption).getOrElse(0L),
+      data = io.circe.parser.parse(
+        Option(doc.get("data")).map(_.toString).getOrElse("{}")
+      ).getOrElse(io.circe.Json.obj())
+    )
+
   def routes(repo: RestApiRepository): List[ZServerEndpoint[Any, Any]] = List(
     listEp.zServerLogic { case (tenantId, limit, skip, userId, channel) =>
-      ZIO.succeed(NotificationsResponse(Nil, 0))
+      repo.listNotifications(tenantId, limit.getOrElse(25), skip.getOrElse(0), userId, channel)
+        .map { pr =>
+          NotificationsResponse(pr.result.flatMap(docToNotification), pr.count)
+        }
+        .mapError(_.getMessage)
     },
     deleteEp.zServerLogic { case (id, tenantId) =>
-      ZIO.unit
+      repo.deleteNotification(tenantId, id).mapError(_.getMessage).unit
     },
     getPreferencesEp.zServerLogic { case (userId, tenantId) =>
-      ZIO.succeed(io.circe.Json.obj())
+      repo.getNotificationPreferences(tenantId, userId)
+        .map(_.getOrElse(io.circe.Json.obj()))
+        .mapError(_.getMessage)
     },
     updatePreferencesEp.zServerLogic { case (userId, tenantId, body) =>
-      ZIO.succeed(body)
+      repo.upsertNotificationPreferences(tenantId, userId, body)
+        .as(body)
+        .mapError(_.getMessage)
     }
   )

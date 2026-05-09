@@ -91,6 +91,14 @@ service BillingService {
   // Disburse a finalized transfer to the site owner's connected account.
   // Corresponds to BillingSendTransfer action.
   rpc SendTransfer(SendTransferRequest) returns (SendTransferResponse);
+
+  // ── Invoice retrieval ──────────────────────────────────────────────────────
+
+  // List invoices for a user (optionally paginated).
+  rpc GetInvoices(GetInvoicesRequest) returns (GetInvoicesResponse);
+
+  // Retrieve a single invoice by internal ID.
+  rpc GetInvoice(GetInvoiceRequest) returns (GetInvoiceResponse);
 }
 
 // ── User billing messages ──────────────────────────────────────────────────
@@ -262,4 +270,41 @@ message SendTransferResponse {
   // Resulting transfer status: transferred
   string status               = 3;
   string error                = 4;
+}
+
+// ── Invoice retrieval messages ─────────────────────────────────────────────
+
+message GetInvoicesRequest {
+  string tenant_id = 1;
+  string user_id   = 2;
+  int32  limit     = 3;
+  int32  skip      = 4;
+}
+
+message InvoiceRecord {
+  string id               = 1;
+  string tenant_id        = 2;
+  string user_id          = 3;
+  string invoice_number   = 4;
+  string status           = 5;
+  int32  amount_cents     = 6;
+  string currency         = 7;
+  string download_url     = 8;
+  int64  created_on       = 9;   // Unix epoch millis
+  int64  last_changed_on  = 10;  // Unix epoch millis
+}
+
+message GetInvoicesResponse {
+  repeated InvoiceRecord invoices = 1;
+  int32                  total    = 2;
+}
+
+message GetInvoiceRequest {
+  string tenant_id  = 1;
+  string invoice_id = 2;
+}
+
+message GetInvoiceResponse {
+  bool          found   = 1;
+  InvoiceRecord invoice = 2;
 }

@@ -21,7 +21,7 @@ final class RestApiServer(
   def start: Task[Unit] =
     val allEndpoints =
       ChargingStationEndpoints.routes(repo) ++
-        TransactionEndpoints.routes(repo) ++
+        TransactionEndpoints.routes(repo, gatewayClient) ++
         UserEndpoints.routes(repo) ++
         SiteEndpoints.routes(repo) ++
         CompanyEndpoints.routes(repo) ++

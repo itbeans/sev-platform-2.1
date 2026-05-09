@@ -24,8 +24,8 @@ final class PricingGrpcTransport(handler: PricingGrpcHandler, rt: Runtime[Any])
             tenantId = req.tenantId,
             chargingStationId = req.chargingStationId,
             connectorId = req.connectorId,
-            connectorType = "",     // not in proto — defaulted
-            connectorPowerKw = 0.0, // not in proto — defaulted
+            connectorType = req.connectorType,
+            connectorPowerKw = req.connectorPowerKw,
             siteId = None,
             siteAreaId = None,
             companyId = None,
@@ -51,15 +51,15 @@ final class PricingGrpcTransport(handler: PricingGrpcHandler, rt: Runtime[Any])
             transactionId = req.transactionId,
             pricingModelJson = req.pricingModelJson,
             consumptionWh = req.consumptionWh,
-            cumulatedWh = 0.0,     // not in proto
-            totalDurationSecs = 0, // not in proto
+            cumulatedWh = 0.0,
+            totalDurationSecs = 0,
             inactivitySecs = 0,
             totalInactivitySecs = 0,
             intervalStart = req.intervalStart,
             intervalEnd = req.intervalEnd,
             timezone = "UTC",
-            connectorType = "",
-            connectorPowerKw = req.instantWatts / 1000.0,
+            connectorType = req.connectorType,
+            connectorPowerKw = if req.connectorPowerKw > 0 then req.connectorPowerKw else req.instantWatts / 1000.0,
             flatFeeAlreadyPriced = false,
             cumulatedPrice = 0.0
           )
@@ -84,9 +84,9 @@ final class PricingGrpcTransport(handler: PricingGrpcHandler, rt: Runtime[Any])
             totalConsumptionWh = req.totalConsumptionWh,
             startTimestamp = req.startTimestamp,
             endTimestamp = req.endTimestamp,
-            timezone = "UTC", // not in proto
-            connectorType = "",
-            connectorPowerKw = 0.0
+            timezone = "UTC",
+            connectorType = req.connectorType,
+            connectorPowerKw = req.connectorPowerKw
           )
         )
         .map { r =>

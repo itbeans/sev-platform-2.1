@@ -69,6 +69,11 @@ object Main extends ZIOAppDefault:
           s"immediatePayment=${cfg.immediatePayment} " +
           s"monthlyBillingDay=${cfg.monthlyBillingDay}"
       )
+      // Start gRPC server in background
+      _ <- BillingGrpcTransport.start
+        .tapError(err => ZIO.logError(s"Billing gRPC server error: ${err.getMessage}"))
+        .ignore
+        .forkDaemon
       // Start Kafka consumer in background
       _ <- consumer.start
         .tapError(err => ZIO.logError(s"Billing Kafka consumer error: ${err.getMessage}"))

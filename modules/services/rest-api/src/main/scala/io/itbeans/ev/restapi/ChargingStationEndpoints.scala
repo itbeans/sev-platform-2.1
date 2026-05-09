@@ -78,8 +78,9 @@ object ChargingStationEndpoints:
         .mapError(_.getMessage)
     },
     updateEp.zServerLogic { case (id, tenantId, body) =>
-      repo.getStation(tenantId, id)
-        .someOrFail(s"ChargingStation $id not found")
+      (repo.updateStation(tenantId, id, org.bson.Document.parse(body.noSpaces)) *>
+        repo.getStation(tenantId, id)
+          .someOrFail(s"ChargingStation $id not found"))
         .mapError { case e: Throwable => e.getMessage; case s: String => s }
     },
     deleteEp.zServerLogic { case (id, tenantId) =>

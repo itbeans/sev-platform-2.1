@@ -31,6 +31,8 @@ message ResolvePricingRequest {
   string user_id             = 4;
   string tag_id              = 5;
   int64  start_timestamp     = 6;  // Unix epoch millis
+  string connector_type      = 7;  // OCPP connector type (e.g. "CCS2", "Type2")
+  double connector_power_kw  = 8;  // rated power in kW (0 = unknown)
 }
 
 message ResolvePricingResponse {
@@ -47,6 +49,8 @@ message PriceConsumptionRequest {
   double instant_watts        = 5;
   int64  interval_start       = 6;  // Unix epoch millis
   int64  interval_end         = 7;
+  string connector_type       = 8;  // OCPP connector type
+  double connector_power_kw   = 9;  // rated power in kW
 }
 
 message PriceConsumptionResponse {
@@ -62,6 +66,8 @@ message FinalisePriceRequest {
   double total_consumption_wh = 4;
   int64  start_timestamp      = 5;
   int64  end_timestamp        = 6;
+  string connector_type       = 7;  // OCPP connector type
+  double connector_power_kw   = 8;  // rated power in kW
 }
 
 message FinalisePriceResponse {
