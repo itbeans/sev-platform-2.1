@@ -75,6 +75,30 @@ object TransactionEndpoints:
       ZIO.succeed(io.circe.Json.obj("status" -> io.circe.Json.fromString("Stopped")))
     },
     exportEp.zServerLogic { case (tenantId, inProgress, stationId) =>
-      ZIO.succeed(("text/csv; charset=utf-8", "id,station,start,stop,kwh\n".getBytes("UTF-8")))
+      repo.listTransactions(tenantId, limit = 10000, skip = 0, inProgress, stationId, userId = None)
+        .map { pr =>
+          val header = "ID,ChargingStationID,ConnectorID,UserID,TagID,StartDate,EndDate,MeterStart,MeterStop,ConsumptionWh,DurationSecs,Price,Currency,StopReason,OcppVersion\n"
+          val rows = pr.result.map { t =>
+            List(
+              t.id.value.toString,
+              t.chargingStationId.value,
+              t.connectorId.toString,
+              t.userId.map(_.value).getOrElse(""),
+              t.tagId.getOrElse(""),
+              t.startDate.toString,
+              t.endDate.map(_.toString).getOrElse(""),
+              t.meterStart.toString,
+              t.meterStop.map(_.toString).getOrElse(""),
+              t.currentConsumptionWh.map(_.toString).getOrElse(""),
+              t.currentTotalDurationSecs.map(_.toString).getOrElse(""),
+              t.currentCumulatedPrice.map(_.toString).getOrElse(""),
+              t.priceUnit.getOrElse(""),
+              t.stopReason.getOrElse(""),
+              t.ocppVersion.toString
+            ).mkString(",")
+          }
+          ("text/csv; charset=utf-8", (header + rows.mkString("\n")).getBytes("UTF-8"))
+        }
+        .mapError(_.getMessage)
     }
   )

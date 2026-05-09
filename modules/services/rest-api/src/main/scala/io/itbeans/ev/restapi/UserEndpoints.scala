@@ -91,7 +91,26 @@ object UserEndpoints:
       repo.deleteUser(tenantId, id).mapError(_.getMessage).unit
     },
     exportEp.zServerLogic { case (tenantId, role) =>
-      ZIO.succeed(("text/csv; charset=utf-8", "id,email,role,status\n".getBytes("UTF-8")))
+      repo.listUsers(tenantId, limit = 10000, skip = 0, role, search = None)
+        .map { pr =>
+          val header = "ID,FirstName,LastName,Email,Role,Status,Locale,Timezone,CreatedOn,LastLoginOn\n"
+          val rows = pr.result.map { u =>
+            List(
+              u.id.value,
+              u.firstName,
+              u.lastName,
+              u.email,
+              u.role.toString,
+              u.status.toString,
+              u.locale,
+              u.timezone,
+              u.createdOn.toString,
+              u.lastLoginOn.map(_.toString).getOrElse("")
+            ).mkString(",")
+          }
+          ("text/csv; charset=utf-8", (header + rows.mkString("\n")).getBytes("UTF-8"))
+        }
+        .mapError(_.getMessage)
     },
     assignSitesEp.zServerLogic { case (id, tenantId, _) =>
       repo.getUser(tenantId, id)

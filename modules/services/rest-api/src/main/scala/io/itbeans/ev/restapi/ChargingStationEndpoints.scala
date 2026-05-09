@@ -86,6 +86,28 @@ object ChargingStationEndpoints:
       repo.deleteStation(tenantId, id).mapError(_.getMessage).unit
     },
     exportEp.zServerLogic { case tenantId =>
-      ZIO.succeed(("text/csv; charset=utf-8", "id,vendor,model\n".getBytes("UTF-8")))
+      repo.listStations(tenantId, limit = 10000, skip = 0, siteId = None, siteAreaId = None)
+        .map { pr =>
+          val header = "ID,Vendor,Model,SerialNumber,FirmwareVersion,OcppVersion,SiteID,SiteAreaID,MaxPowerW,Inactive,Public,LastHeartbeat,CreatedOn\n"
+          val rows = pr.result.map { s =>
+            List(
+              s.id.value,
+              s.chargePointVendor,
+              s.chargePointModel,
+              s.chargePointSerialNumber.getOrElse(""),
+              s.firmwareVersion.getOrElse(""),
+              s.ocppVersion.map(_.toString).getOrElse(""),
+              s.siteId.map(_.value).getOrElse(""),
+              s.siteAreaId.map(_.value).getOrElse(""),
+              s.maximumPower.map(_.toString).getOrElse(""),
+              s.inactive.toString,
+              s.public.toString,
+              s.lastHeartbeat.map(_.toString).getOrElse(""),
+              s.createdOn.toString
+            ).mkString(",")
+          }
+          ("text/csv; charset=utf-8", (header + rows.mkString("\n")).getBytes("UTF-8"))
+        }
+        .mapError(_.getMessage)
     }
   )
