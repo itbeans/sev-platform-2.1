@@ -2,7 +2,7 @@
 
 > **Last updated:** 2026-05-10  
 > **Branch:** `claude/codebase-review-summary-hgNgO`  
-> **Overall progress: ~97%**
+> **Overall progress: ~98%**
 
 Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 
@@ -18,7 +18,7 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 | `.scalafmt.conf` | ✅ | |
 | `ev-domain` shared library — core entities | ✅ | Tenant, User, ChargingStation, Transaction, Site, Tag, Events |
 | `ev-domain` — OCPP 2.1 message types | ✅ | All actions incl. V2X/DER/BatterySwap, SEND/CALLRESULTERROR frames |
-| `ev-domain` — remaining entities | ⬜ | Asset, Pricing, Billing, Car, ChargingProfile, Notification, Statistics, Settings, RegistrationToken, Connection |
+| `ev-domain` — remaining entities | ✅ | Asset, Pricing, Billing, Car, ChargingProfile, Notification, Statistics, Settings, RegistrationToken, Connection |
 | `ev-auth-core` shared library | ✅ | UserToken, RBAC/ABAC interfaces, Casbin stub |
 | `ev-auth-core` — Casbin policy files (`rbac_model.conf`, `rbac_policy.csv`) | ⬜ | Translate `AuthorizationsDefinition.ts` 23×4 grant matrix |
 | `ev-auth-core` — ABAC filter implementations | ⬜ | Translate `dynamic-filters/`, `dynamic-assert/`, `dynamic-data-source/` |
@@ -325,7 +325,7 @@ Listed by severity. Items marked ✅ have been fixed.
 | Phase 3: Core services | Auth, Roaming, Billing | ~22% | ✅ **100% done** (canary cutover deferred to ops) |
 | Phase 4: Real-time core | Smart Charging, Scheduler, Analytics, REST API, OCPP Gateway, OCPP Processor | ~52% | ✅ **100% done** (OCPP 1.6/2.x SOAP bridge deferred) |
 | Cross-cutting | Casbin, Helm, Istio, data migrations, test suites | ~10% (distributed) | 🔄 ~30% (ZIO Test suites ✅ — Casbin/Helm/Istio/migrations deferred) |
-| **Total** | | **100%** | **~97% done** |
+| **Total** | | **100%** | **~98% done** |
 
 ---
 
