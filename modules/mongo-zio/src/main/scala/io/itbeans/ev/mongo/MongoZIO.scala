@@ -102,6 +102,9 @@ final class TenantCollection[T: ClassTag](
   def deleteOne(filter: Bson): Task[Unit] =
     ZIO.fromFuture(_ => collection.deleteOne(filter).toFuture()).unit
 
+  def deleteMany(filter: Bson): Task[Long] =
+    ZIO.fromFuture(_ => collection.deleteMany(filter).toFuture()).map(_.getDeletedCount)
+
   def countDocuments(filter: Bson): Task[Long] =
     ZIO.fromFuture(_ => collection.countDocuments(filter).toFuture())
 

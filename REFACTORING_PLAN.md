@@ -2,7 +2,7 @@
 
 > **Last updated:** 2026-05-10  
 > **Branch:** `claude/codebase-review-summary-hgNgO`  
-> **Overall progress: ~99%**
+> **Overall progress: ~100% Phase 1**
 
 Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 
@@ -23,9 +23,9 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 | `ev-auth-core` — Casbin policy files (`rbac_model.conf`, `rbac_policy.csv`) | ✅ | 369-line policy: 6 roles × 40+ resources × all actions; role inheritance |
 | `ev-auth-core` — ABAC filter implementations | ✅ | buildFilter + projectFields; SiteAdmin/SiteOwner/Basic/Demo filters; 40+ test cases |
 | `ev-mongo-zio` shared library — TenantCollection wrapper | ✅ | Replicates `{tenantId}.{collectionName}` naming |
-| `ev-mongo-zio` — entity repositories (30 storage classes) | ⬜ | One per entity, mirrors `*Storage.ts` |
+| `ev-mongo-zio` — entity repositories (30 storage classes) | ✅ | DomainBsonCodecs + 9 repository files covering all entities |
 | `ev-kafka-zio` shared library — producer + topic definitions | ✅ | |
-| `ev-kafka-zio` — consumer wrapper | ⬜ | |
+| `ev-kafka-zio` — consumer wrapper | ✅ | compete + fan-out + pattern subscription modes |
 | gRPC proto: `auth_service.proto` | ✅ | |
 | gRPC proto: `ocpp_gateway.proto` | ✅ | |
 | gRPC proto: `pricing_service.proto` | ✅ | |
