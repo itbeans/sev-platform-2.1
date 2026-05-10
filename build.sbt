@@ -70,6 +70,15 @@ lazy val kafkaZio = project
   )
   .dependsOn(domain)
 
+// OpenTelemetry instrumentation: EvTracing service, OtelLayer, OtelConfig
+lazy val otelZio = project
+  .in(file("modules/otel-zio"))
+  .settings(commonSettings)
+  .settings(
+    name := "ev-otel-zio",
+    libraryDependencies ++= otelZioDeps,
+  )
+
 // Proto definitions (code-generated — consumed by services that use gRPC)
 lazy val proto = project
   .in(file("modules/proto"))
@@ -100,7 +109,7 @@ def serviceProject(id: String, dir: String) =
       dockerUpdateLatest   := true,
     )
     .enablePlugins(JavaAppPackaging, DockerPlugin)
-    .dependsOn(domain, authCore, mongoZio, kafkaZio)
+    .dependsOn(domain, authCore, mongoZio, kafkaZio, otelZio)
 
 // OCPP 2.1 WebSocket gateway — manages all station connections
 lazy val ocppGateway = serviceProject("ocpp-gateway", "ocpp-gateway")
@@ -204,7 +213,7 @@ lazy val root = project
     publish / skip := true,
   )
   .aggregate(
-    domain, authCore, mongoZio, kafkaZio, proto,
+    domain, authCore, mongoZio, kafkaZio, otelZio, proto,
     ocppGateway, ocppProcessor, restApi, authService,
     billingService, pricingService, smartCharging,
     notification, roaming, asset, car, scheduler, analytics,

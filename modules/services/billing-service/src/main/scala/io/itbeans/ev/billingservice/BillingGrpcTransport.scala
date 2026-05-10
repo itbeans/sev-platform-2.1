@@ -2,6 +2,7 @@ package io.itbeans.ev.billingservice
 
 import io.grpc.netty.NettyServerBuilder
 import io.itbeans.ev.billing.grpc.billing_service._
+import io.itbeans.ev.otel.EvTracing
 import zio._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -9,13 +10,6 @@ import scala.concurrent.{ExecutionContext, Future}
 // ---------------------------------------------------------------------------
 // BillingGrpcTransport — bridges the ScalaPB-generated BillingService gRPC
 // interface to the ZIO-native billing handler and underlying services.
-//
-// Implements all RPCs declared in billing_service.proto; delegates to:
-//   BillingGrpcHandler  — invoice listing, payment method checks, charge
-//   BillingService      — high-level business operations
-//   InvoiceRepository   — direct invoice lookup by ID
-//   BillingUserRepository — billing user / payment method lookup
-//   StripeClient        — Stripe payment method attach/detach
 // ---------------------------------------------------------------------------
 
 final class BillingGrpcTransport(
@@ -25,16 +19,15 @@ final class BillingGrpcTransport(
     userRepo: BillingUserRepository,
     stripe: StripeClient,
     cfg: BillingConfig,
+    tracing: EvTracing,
     rt: Runtime[Any]
 ) extends BillingServiceGrpc.BillingService:
 
-  private def run[A](effect: Task[A]): Future[A] =
-    Unsafe.unsafe(implicit u => rt.unsafe.runToFuture(effect))
-
-  // ── User billing ──────────────────────────────────────────────────────────
+  private def run[A](spanName: String)(effect: Task[A]): Future[A] =
+    Unsafe.unsafe(implicit u => rt.unsafe.runToFuture(tracing.spanTask(spanName)(effect)))
 
   override def synchronizeBillingUser(req: SynchronizeBillingUserRequest): Future[SynchronizeBillingUserResponse] =
-    run {
+    run("billing.synchronizeBillingUser") {
       userRepo.findByUserId(req.tenantId, req.userId)
         .map {
           case Some(bu) => SynchronizeBillingUserResponse(success = true, billingCustomerId = bu.customerId)
@@ -44,16 +37,14 @@ final class BillingGrpcTransport(
     }
 
   override def forceSynchronizeUser(req: ForceSynchronizeUserRequest): Future[ForceSynchronizeUserResponse] =
-    run {
+    run("billing.forceSynchronizeUser") {
       ZIO.succeed(ForceSynchronizeUserResponse(success = true))
     }
-
-  // ── Transaction pre-check ─────────────────────────────────────────────────
 
   override def checkTransactionBillingPrerequisites(
       req: CheckTransactionBillingPrerequisitesRequest
   ): Future[CheckTransactionBillingPrerequisitesResponse] =
-    run {
+    run("billing.checkTransactionBillingPrerequisites") {
       if !cfg.immediatePayment then
         ZIO.succeed(CheckTransactionBillingPrerequisitesResponse(canStart = true))
       else
@@ -71,10 +62,8 @@ final class BillingGrpcTransport(
           .catchAll(_ => ZIO.succeed(CheckTransactionBillingPrerequisitesResponse(canStart = true)))
     }
 
-  // ── Payment methods ───────────────────────────────────────────────────────
-
   override def setupPaymentMethod(req: SetupPaymentMethodRequest): Future[SetupPaymentMethodResponse] =
-    run {
+    run("billing.setupPaymentMethod") {
       userRepo.findByUserId(req.tenantId, req.userId).flatMap {
         case None =>
           ZIO.succeed(SetupPaymentMethodResponse(success = false, error = "No billing user found"))
@@ -96,7 +85,7 @@ final class BillingGrpcTransport(
     }
 
   override def deletePaymentMethod(req: DeletePaymentMethodRequest): Future[DeletePaymentMethodResponse] =
-    run {
+    run("billing.deletePaymentMethod") {
       stripe
         .detachPaymentMethod(req.paymentMethodId)
         .as(DeletePaymentMethodResponse(success = true))
@@ -104,7 +93,7 @@ final class BillingGrpcTransport(
     }
 
   override def getPaymentMethods(req: GetPaymentMethodsRequest): Future[GetPaymentMethodsResponse] =
-    run {
+    run("billing.getPaymentMethods") {
       handler
         .checkPaymentMethods(CheckPaymentMethodsRequestADT(req.tenantId, req.userId))
         .map { r =>
@@ -124,10 +113,8 @@ final class BillingGrpcTransport(
         .catchAll(_ => ZIO.succeed(GetPaymentMethodsResponse()))
     }
 
-  // ── Invoices ──────────────────────────────────────────────────────────────
-
   override def chargeInvoice(req: ChargeInvoiceRequest): Future[ChargeInvoiceResponse] =
-    run {
+    run("billing.chargeInvoice") {
       billing
         .chargeInvoice(req.tenantId, req.invoiceId)
         .map(inv => ChargeInvoiceResponse(success = true, invoiceStatus = inv.status.code))
@@ -135,7 +122,7 @@ final class BillingGrpcTransport(
     }
 
   override def downloadInvoice(req: DownloadInvoiceRequest): Future[DownloadInvoiceResponse] =
-    run {
+    run("billing.downloadInvoice") {
       invoiceRepo.findById(req.tenantId, req.invoiceId).map {
         case None      => DownloadInvoiceResponse(found = false)
         case Some(inv) => DownloadInvoiceResponse(found = true, downloadUrl = inv.downloadUrl.getOrElse(""))
@@ -143,7 +130,7 @@ final class BillingGrpcTransport(
     }
 
   override def getInvoices(req: GetInvoicesRequest): Future[GetInvoicesResponse] =
-    run {
+    run("billing.getInvoices") {
       invoiceRepo
         .findByUserId(req.tenantId, req.userId)
         .map { invoices =>
@@ -154,38 +141,32 @@ final class BillingGrpcTransport(
     }
 
   override def getInvoice(req: GetInvoiceRequest): Future[GetInvoiceResponse] =
-    run {
+    run("billing.getInvoice") {
       invoiceRepo.findById(req.tenantId, req.invoiceId).map {
         case None      => GetInvoiceResponse(found = false)
         case Some(inv) => GetInvoiceResponse(found = true, invoice = Some(toInvoiceRecord(inv)))
       }
     }
 
-  // ── Billing accounts ──────────────────────────────────────────────────────
-
   override def onboardBillingAccount(req: OnboardBillingAccountRequest): Future[OnboardBillingAccountResponse] =
-    run {
+    run("billing.onboardBillingAccount") {
       ZIO.succeed(OnboardBillingAccountResponse(success = false, error = "Not implemented via gRPC"))
     }
 
   override def activateBillingAccount(req: ActivateBillingAccountRequest): Future[ActivateBillingAccountResponse] =
-    run {
+    run("billing.activateBillingAccount") {
       ZIO.succeed(ActivateBillingAccountResponse(success = false, error = "Not implemented via gRPC"))
     }
 
-  // ── Transfers ─────────────────────────────────────────────────────────────
-
   override def finalizeTransfer(req: FinalizeTransferRequest): Future[FinalizeTransferResponse] =
-    run {
+    run("billing.finalizeTransfer") {
       ZIO.succeed(FinalizeTransferResponse(success = false, error = "Not implemented via gRPC"))
     }
 
   override def sendTransfer(req: SendTransferRequest): Future[SendTransferResponse] =
-    run {
+    run("billing.sendTransfer") {
       ZIO.succeed(SendTransferResponse(success = false, error = "Not implemented via gRPC"))
     }
-
-  // ── Helpers ───────────────────────────────────────────────────────────────
 
   private def toInvoiceRecord(inv: Invoice): InvoiceRecord =
     InvoiceRecord(
@@ -205,7 +186,7 @@ object BillingGrpcTransport:
 
   val start: RIO[
     BillingGrpcHandler & BillingService & InvoiceRepository &
-      BillingUserRepository & StripeClient & BillingConfig,
+      BillingUserRepository & StripeClient & BillingConfig & EvTracing,
     Unit
   ] =
     for
@@ -215,8 +196,9 @@ object BillingGrpcTransport:
       userRepo    <- ZIO.service[BillingUserRepository]
       stripe      <- ZIO.service[StripeClient]
       cfg         <- ZIO.service[BillingConfig]
+      tracing     <- ZIO.service[EvTracing]
       rt          <- ZIO.runtime[Any]
-      impl = new BillingGrpcTransport(handler, billing, invoiceRepo, userRepo, stripe, cfg, rt)
+      impl = new BillingGrpcTransport(handler, billing, invoiceRepo, userRepo, stripe, cfg, tracing, rt)
       server <- ZIO.attempt(
         NettyServerBuilder
           .forPort(cfg.grpcPort)

@@ -2,6 +2,7 @@ package io.itbeans.ev.ocppgateway
 
 import io.itbeans.ev.auth.CasbinAuthorizationService
 import io.itbeans.ev.kafka.{KafkaConfig, LiveEvKafkaProducer}
+import io.itbeans.ev.otel.{EvTracing, OtelConfig, OtelLayer}
 import zio._
 import zio.config.typesafe.TypesafeConfigProvider
 import zio.logging.backend.SLF4J
@@ -32,6 +33,9 @@ object Main extends ZIOAppDefault:
       // Config
       ZLayer.fromZIO(ZIO.config[KafkaConfig]),
       ZLayer.fromZIO(ZIO.config[GatewayConfig]),
+      ZLayer.fromZIO(ZIO.config[OtelConfig]),
+      OtelLayer.live,
+      EvTracing.live,
       // Kafka producer
       LiveEvKafkaProducer.live,
       // Connection registry (ZHub + Ref)
@@ -51,7 +55,7 @@ object Main extends ZIOAppDefault:
     )
 
   private val program: ZIO[
-    GatewayConfig & OcppGatewayServer & ConnectionRegistry & OcppFrameHandler & CrossPodCommandRelay,
+    GatewayConfig & OcppGatewayServer & ConnectionRegistry & OcppFrameHandler & CrossPodCommandRelay & EvTracing,
     Throwable,
     Unit
   ] =

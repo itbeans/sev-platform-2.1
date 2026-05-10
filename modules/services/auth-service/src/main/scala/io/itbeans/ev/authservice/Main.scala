@@ -1,6 +1,7 @@
 package io.itbeans.ev.authservice
 
 import io.itbeans.ev.mongo.{MongoClientLayer, MongoConfig, MongoDatabaseLayer}
+import io.itbeans.ev.otel.{EvTracing, OtelConfig, OtelLayer}
 import zio._
 import zio.config.typesafe.TypesafeConfigProvider
 import zio.http.Server
@@ -29,6 +30,10 @@ object Main extends ZIOAppDefault:
       // ── Config layers ──────────────────────────────────────────────────
       ZLayer.fromZIO(ZIO.config[MongoConfig]),
       ZLayer.fromZIO(ZIO.config[AuthConfig]),
+      ZLayer.fromZIO(ZIO.config[OtelConfig]),
+      // ── OpenTelemetry ──────────────────────────────────────────────────
+      OtelLayer.live,
+      EvTracing.live,
       // ── Infrastructure ─────────────────────────────────────────────────
       MongoClientLayer.live,
       MongoDatabaseLayer.live,
@@ -48,15 +53,15 @@ object Main extends ZIOAppDefault:
 
   private val program: ZIO[
     UserRepository & TenantRepository & TagRepository & TokenService &
-      ParallelRunService & AuthGrpcHandler & Server & AuthConfig,
+      ParallelRunService & AuthGrpcHandler & Server & AuthConfig & EvTracing,
     Throwable,
     Unit
   ] =
     for
-      cfg           <- ZIO.service[AuthConfig]
-      userRepo      <- ZIO.service[UserRepository]
-      tenantRepo    <- ZIO.service[TenantRepository]
-      tokenSvc      <- ZIO.service[TokenService]
+      cfg            <- ZIO.service[AuthConfig]
+      userRepo       <- ZIO.service[UserRepository]
+      tenantRepo     <- ZIO.service[TenantRepository]
+      tokenSvc       <- ZIO.service[TokenService]
       parallelRunSvc <- ZIO.service[ParallelRunService]
       _ <- ZIO.logInfo(
         s"ev-auth-service starting: http=:${cfg.httpPort} grpc=:${cfg.grpcPort} " +

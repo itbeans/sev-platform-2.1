@@ -4,6 +4,7 @@ import io.itbeans.ev.kafka.{KafkaConfig, LiveEvKafkaProducer}
 import io.itbeans.ev.mongo.{MongoClientLayer, MongoConfig, MongoDatabaseLayer}
 import io.itbeans.ev.asset.connector.AssetConnectorRegistry
 import io.itbeans.ev.domain.TenantId
+import io.itbeans.ev.otel.{EvTracing, OtelConfig, OtelLayer}
 import zio._
 import zio.config.typesafe.TypesafeConfigProvider
 import zio.http.Server
@@ -37,6 +38,9 @@ object Main extends ZIOAppDefault:
       ZLayer.fromZIO(ZIO.config[MongoConfig]),
       ZLayer.fromZIO(ZIO.config[KafkaConfig]),
       ZLayer.fromZIO(ZIO.config[AssetConfig]),
+      ZLayer.fromZIO(ZIO.config[OtelConfig]),
+      OtelLayer.live,
+      EvTracing.live,
       // ── Infrastructure ─────────────────────────────────────────────────
       MongoClientLayer.live,
       MongoDatabaseLayer.live,

@@ -1,6 +1,7 @@
 package io.itbeans.ev.pricingservice
 
 import io.itbeans.ev.mongo.{MongoClientLayer, MongoConfig, MongoDatabaseLayer}
+import io.itbeans.ev.otel.{EvTracing, OtelConfig, OtelLayer}
 import zio._
 import zio.config.typesafe.TypesafeConfigProvider
 import zio.http.Server
@@ -25,6 +26,9 @@ object Main extends ZIOAppDefault:
     Runtime.setConfigProvider(TypesafeConfigProvider.fromResourcePath()),
     ZLayer.fromZIO(ZIO.config[MongoConfig]),
     ZLayer.fromZIO(ZIO.config[PricingConfig]),
+    ZLayer.fromZIO(ZIO.config[OtelConfig]),
+    OtelLayer.live,
+    EvTracing.live,
     MongoClientLayer.live,
     MongoDatabaseLayer.live,
     MongoPricingRepository.live,
@@ -35,7 +39,7 @@ object Main extends ZIOAppDefault:
   )
 
   private val program: ZIO[
-    PricingRepository & PricingGrpcHandler & Server & PricingConfig,
+    PricingRepository & PricingGrpcHandler & Server & PricingConfig & EvTracing,
     Throwable,
     Nothing
   ] =

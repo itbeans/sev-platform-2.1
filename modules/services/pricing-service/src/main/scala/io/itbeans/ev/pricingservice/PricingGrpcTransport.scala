@@ -1,23 +1,20 @@
 package io.itbeans.ev.pricingservice
 
 import io.grpc.netty.NettyServerBuilder
+import io.itbeans.ev.otel.EvTracing
 import io.itbeans.ev.pricing.grpc.pricing_service._
 import zio._
 
 import scala.concurrent.{ExecutionContext, Future}
 
-/**
- * Bridges the generated Future-based `PricingServiceGrpc.PricingService` to
- *  the ZIO-native `PricingGrpcHandler`.
- */
-final class PricingGrpcTransport(handler: PricingGrpcHandler, rt: Runtime[Any])
+final class PricingGrpcTransport(handler: PricingGrpcHandler, tracing: EvTracing, rt: Runtime[Any])
     extends PricingServiceGrpc.PricingService:
 
-  private def run[A](effect: Task[A]): Future[A] =
-    Unsafe.unsafe(implicit u => rt.unsafe.runToFuture(effect))
+  private def run[A](spanName: String)(effect: Task[A]): Future[A] =
+    Unsafe.unsafe(implicit u => rt.unsafe.runToFuture(tracing.spanTask(spanName)(effect)))
 
   override def resolvePricing(req: ResolvePricingRequest): Future[ResolvePricingResponse] =
-    run(
+    run("pricing.resolvePricing")(
       handler
         .resolvePricing(
           ResolvePricingRequestADT(
@@ -43,7 +40,7 @@ final class PricingGrpcTransport(handler: PricingGrpcHandler, rt: Runtime[Any])
     )
 
   override def priceConsumption(req: PriceConsumptionRequest): Future[PriceConsumptionResponse] =
-    run(
+    run("pricing.priceConsumption")(
       handler
         .priceConsumption(
           PriceConsumptionRequestADT(
@@ -74,7 +71,7 @@ final class PricingGrpcTransport(handler: PricingGrpcHandler, rt: Runtime[Any])
     )
 
   override def finalisePrice(req: FinalisePriceRequest): Future[FinalisePriceResponse] =
-    run(
+    run("pricing.finalisePrice")(
       handler
         .finalisePrice(
           FinalisePriceRequestADT(
@@ -100,12 +97,13 @@ final class PricingGrpcTransport(handler: PricingGrpcHandler, rt: Runtime[Any])
 
 object PricingGrpcTransport:
 
-  val start: RIO[PricingGrpcHandler & PricingConfig, Unit] =
+  val start: RIO[PricingGrpcHandler & PricingConfig & EvTracing, Unit] =
     for
       handler <- ZIO.service[PricingGrpcHandler]
       cfg     <- ZIO.service[PricingConfig]
+      tracing <- ZIO.service[EvTracing]
       rt      <- ZIO.runtime[Any]
-      impl = new PricingGrpcTransport(handler, rt)
+      impl = new PricingGrpcTransport(handler, tracing, rt)
       server <- ZIO.attempt(
         NettyServerBuilder
           .forPort(cfg.grpcPort)

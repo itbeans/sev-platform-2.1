@@ -280,7 +280,7 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 | Casbin `rbac_model.conf` | ✅ | Standard RBAC model with wildcard matching |
 | Casbin `rbac_policy.csv` | ✅ | 369 rules covering all 6 roles and 40+ resources |
 | ABAC dynamic filter implementations (10+ filter types) | ✅ | SiteAdmin/SiteOwner/Basic/Demo MongoDB filter builders |
-| OpenTelemetry instrumentation in all services | ⬜ | Replace `Logging.traceDatabaseRequestStart/End` |
+| OpenTelemetry instrumentation in all services | ✅ | `ev-otel-zio` module: `EvTracing` service + `OtelLayer`; spans on all 6 gRPC transports; wired in all 13 service Main.scala files; disabled by default (`otel.enabled=false`) |
 | Prometheus metrics in all services | ⬜ | Mirror `prom-client` metrics |
 | Kubernetes Helm charts (per service + umbrella) | ⬜ | |
 | Kubernetes HPA config (OCPP Gateway: scale on WS connections) | ⬜ | |

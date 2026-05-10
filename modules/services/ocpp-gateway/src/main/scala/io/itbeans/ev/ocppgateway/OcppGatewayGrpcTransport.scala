@@ -4,14 +4,15 @@ import io.circe.parser.parse
 import io.grpc.netty.NettyServerBuilder
 import io.itbeans.ev.domain.{ChargingStationId, TenantId}
 import io.itbeans.ev.ocpp.grpc.ocpp_gateway._
+import io.itbeans.ev.otel.EvTracing
 import zio._
 import zio.http.{ChannelEvent, WebSocketFrame}
 
 import scala.concurrent.{ExecutionContext, Future}
 
 // ---------------------------------------------------------------------------
-// OcppGatewayGrpcTransport — bridges generated Future-based gRPC service trait
-// to ZIO effects backed by ConnectionRegistry + OcppFrameHandler.
+// OcppGatewayGrpcTransport — bridges generated Future-based gRPC service to
+// ZIO effects backed by ConnectionRegistry + OcppFrameHandler.
 //
 // SendCommand  — sends a new OCPP CALL to the station and awaits CALLRESULT.
 // SendResponse — sends an OCPP CALLRESULT for a station-originated CALL.
@@ -23,41 +24,36 @@ final class OcppGatewayGrpcTransport(
     frameHandler: OcppFrameHandler,
     relay: CrossPodCommandRelay,
     cfg: GatewayConfig,
+    tracing: EvTracing,
     rt: Runtime[Any]
 ) extends OcppGatewayServiceGrpc.OcppGatewayService:
 
-  private def run[A](effect: Task[A]): Future[A] =
-    Unsafe.unsafe(implicit u => rt.unsafe.runToFuture(effect))
+  private def run[A](spanName: String)(effect: Task[A]): Future[A] =
+    Unsafe.unsafe(implicit u => rt.unsafe.runToFuture(tracing.spanTask(spanName)(effect)))
 
   override def sendCommand(req: SendCommandRequest): Future[SendCommandResponse] =
-    run(doSendCommand(req))
+    run("gateway.sendCommand")(doSendCommand(req))
 
   override def sendResponse(req: SendResponseRequest): Future[SendResponseAck] =
-    run(doSendResponse(req))
+    run("gateway.sendResponse")(doSendResponse(req))
 
   override def listConnectedStations(
       req: ListConnectedStationsRequest
   ): Future[ListConnectedStationsResponse] =
-    run(doListConnectedStations(req))
+    run("gateway.listConnectedStations")(doListConnectedStations(req))
 
   override def isStationConnected(
       req: IsStationConnectedRequest
   ): Future[IsStationConnectedResponse] =
-    run(doIsStationConnected(req))
-
-  // ── SendCommand ───────────────────────────────────────────────────────────
-  // Sends a new OCPP CALL frame to the station and waits for the CALLRESULT.
+    run("gateway.isStationConnected")(doIsStationConnected(req))
 
   private def doSendCommand(req: SendCommandRequest): UIO[SendCommandResponse] =
-    val key = ConnectionKey(TenantId(req.tenantId), ChargingStationId(req.chargingStationId))
-    val uniqueId = if req.correlationId.nonEmpty then req.correlationId
-    else java.util.UUID.randomUUID().toString
-    val timeoutMs = if req.timeoutSeconds > 0 then req.timeoutSeconds * 1000L
-    else cfg.responseTimeoutMs
+    val key      = ConnectionKey(TenantId(req.tenantId), ChargingStationId(req.chargingStationId))
+    val uniqueId = if req.correlationId.nonEmpty then req.correlationId else java.util.UUID.randomUUID().toString
+    val timeoutMs = if req.timeoutSeconds > 0 then req.timeoutSeconds * 1000L else cfg.responseTimeoutMs
 
     registry.get(key).flatMap {
       case None =>
-        // Station is not on this pod — fan-out via Kafka relay to the pod that owns it
         relay.relay(req)
 
       case Some(entry) =>
@@ -119,10 +115,6 @@ final class OcppGatewayGrpcTransport(
       ))
     )
 
-  // ── SendResponse ──────────────────────────────────────────────────────────
-  // Sends an OCPP CALLRESULT frame back to the station for a CALL it made.
-  // The uniqueId must match the original CALL uniqueId from the Kafka event.
-
   private def doSendResponse(req: SendResponseRequest): UIO[SendResponseAck] =
     val key = ConnectionKey(TenantId(req.tenantId), ChargingStationId(req.chargingStationId))
     registry.get(key).flatMap {
@@ -140,8 +132,6 @@ final class OcppGatewayGrpcTransport(
           .as(SendResponseAck(delivered = true))
           .catchAll(_ => ZIO.succeed(SendResponseAck(delivered = false)))
     }
-
-  // ── Registry queries ─────────────────────────────────────────────────────
 
   private def doListConnectedStations(
       req: ListConnectedStationsRequest
@@ -167,14 +157,15 @@ final class OcppGatewayGrpcTransport(
 
 object OcppGatewayGrpcTransport:
 
-  val start: RIO[ConnectionRegistry & OcppFrameHandler & CrossPodCommandRelay & GatewayConfig, Unit] =
+  val start: RIO[ConnectionRegistry & OcppFrameHandler & CrossPodCommandRelay & GatewayConfig & EvTracing, Unit] =
     for
       registry     <- ZIO.service[ConnectionRegistry]
       frameHandler <- ZIO.service[OcppFrameHandler]
       relay        <- ZIO.service[CrossPodCommandRelay]
       cfg          <- ZIO.service[GatewayConfig]
+      tracing      <- ZIO.service[EvTracing]
       rt           <- ZIO.runtime[Any]
-      impl = new OcppGatewayGrpcTransport(registry, frameHandler, relay, cfg, rt)
+      impl = new OcppGatewayGrpcTransport(registry, frameHandler, relay, cfg, tracing, rt)
       server <- ZIO.attempt(
         NettyServerBuilder
           .forPort(cfg.grpcPort)

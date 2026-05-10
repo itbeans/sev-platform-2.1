@@ -3,6 +3,7 @@ package io.itbeans.ev.notification
 import io.itbeans.ev.kafka.KafkaConfig
 import io.itbeans.ev.mongo.{MongoClientLayer, MongoConfig, MongoDatabaseLayer}
 import io.itbeans.ev.notification.email.SmtpEmailNotificationTask
+import io.itbeans.ev.otel.{EvTracing, OtelConfig, OtelLayer}
 import io.itbeans.ev.notification.fcm.FcmNotificationTaskLive
 import zio._
 import zio.config.typesafe.TypesafeConfigProvider
@@ -33,6 +34,9 @@ object Main extends ZIOAppDefault:
       ZLayer.fromZIO(ZIO.config[MongoConfig]),
       ZLayer.fromZIO(ZIO.config[KafkaConfig]),
       ZLayer.fromZIO(ZIO.config[NotificationConfig]),
+      ZLayer.fromZIO(ZIO.config[OtelConfig]),
+      OtelLayer.live,
+      EvTracing.live,
       // ── Infrastructure ─────────────────────────────────────────────────
       MongoClientLayer.live,
       MongoDatabaseLayer.live,

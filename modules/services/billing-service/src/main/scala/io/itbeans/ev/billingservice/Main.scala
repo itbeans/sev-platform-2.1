@@ -1,6 +1,7 @@
 package io.itbeans.ev.billingservice
 
 import io.itbeans.ev.kafka.KafkaConfig
+import io.itbeans.ev.otel.{EvTracing, OtelConfig, OtelLayer}
 import zio._
 import zio.config.typesafe.TypesafeConfigProvider
 import zio.http.Server
@@ -31,6 +32,9 @@ object Main extends ZIOAppDefault:
       // ── Config layers ──────────────────────────────────────────────────
       ZLayer.fromZIO(ZIO.config[KafkaConfig]),
       ZLayer.fromZIO(ZIO.config[BillingConfig]),
+      ZLayer.fromZIO(ZIO.config[OtelConfig]),
+      OtelLayer.live,
+      EvTracing.live,
       // ── Stripe client ──────────────────────────────────────────────────
       StripeClient.live,
       // ── Repository layers (PostgreSQL/Doobie) ──────────────────────────
@@ -51,7 +55,7 @@ object Main extends ZIOAppDefault:
   private val program: ZIO[
     BillingService & BillingKafkaConsumer & BillingPeriodicTask &
       StripeClient & InvoiceRepository & BillingAccountRepository &
-      BillingUserRepository & BillingGrpcHandler & BillingConfig & Server,
+      BillingUserRepository & BillingGrpcHandler & BillingConfig & Server & EvTracing,
     Throwable,
     Unit
   ] =

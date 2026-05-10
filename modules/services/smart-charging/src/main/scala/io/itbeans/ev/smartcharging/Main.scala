@@ -2,6 +2,7 @@ package io.itbeans.ev.smartcharging
 
 import io.itbeans.ev.kafka.KafkaConfig
 import io.itbeans.ev.mongo.{MongoClientLayer, MongoConfig, MongoDatabaseLayer}
+import io.itbeans.ev.otel.{EvTracing, OtelConfig, OtelLayer}
 import zio._
 import zio.config.magnolia._
 import zio.config.typesafe.TypesafeConfigProvider
@@ -36,6 +37,9 @@ object Main extends ZIOAppDefault:
       ZLayer.fromZIO(ZIO.config[MongoConfig]),
       ZLayer.fromZIO(ZIO.config[KafkaConfig]),
       ZLayer.fromZIO(ZIO.config[SmartChargingConfig]),
+      ZLayer.fromZIO(ZIO.config[OtelConfig]),
+      OtelLayer.live,
+      EvTracing.live,
       // ── MongoDB ────────────────────────────────────────────────────────
       MongoClientLayer.live,
       MongoDatabaseLayer.live,
@@ -54,7 +58,7 @@ object Main extends ZIOAppDefault:
   private val program: ZIO[
     SmartChargingConfig & KafkaConfig &
       SmartChargingService & SmartChargingKafkaConsumer &
-      SmartChargingGrpcHandler & SmartChargingRepository,
+      SmartChargingGrpcHandler & SmartChargingRepository & EvTracing,
     Throwable,
     Unit
   ] =

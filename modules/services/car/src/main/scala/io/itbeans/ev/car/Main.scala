@@ -2,6 +2,7 @@ package io.itbeans.ev.car
 
 import io.itbeans.ev.car.connector.CarConnectorRegistry
 import io.itbeans.ev.mongo.{MongoClientLayer, MongoConfig, MongoDatabaseLayer}
+import io.itbeans.ev.otel.{EvTracing, OtelConfig, OtelLayer}
 import zio._
 import zio.config.typesafe.TypesafeConfigProvider
 import zio.http.Server
@@ -32,6 +33,9 @@ object Main extends ZIOAppDefault:
       // ── Config layers ──────────────────────────────────────────────────
       ZLayer.fromZIO(ZIO.config[MongoConfig]),
       ZLayer.fromZIO(ZIO.config[CarConfig]),
+      ZLayer.fromZIO(ZIO.config[OtelConfig]),
+      OtelLayer.live,
+      EvTracing.live,
       // ── Infrastructure ─────────────────────────────────────────────────
       MongoClientLayer.live,
       MongoDatabaseLayer.live,
@@ -47,7 +51,7 @@ object Main extends ZIOAppDefault:
       Server.defaultWithPort(8080)
     )
 
-  private val program: ZIO[CarService & CarGrpcHandler & Server & CarConfig, Throwable, Unit] =
+  private val program: ZIO[CarService & CarGrpcHandler & Server & CarConfig & EvTracing, Throwable, Unit] =
     for
       _   <- ZIO.logInfo("ev-car starting")
       cfg <- ZIO.service[CarConfig]

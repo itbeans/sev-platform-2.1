@@ -11,6 +11,7 @@ import _root_.io.itbeans.ev.smartcharging.grpc.smart_charging_service.{
   TriggerSmartChargingRequest   => ProtoTriggerRequest,
   TriggerSmartChargingResponse  => ProtoTriggerResponse
 }
+import io.itbeans.ev.otel.EvTracing
 import zio._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -25,14 +26,17 @@ import scala.concurrent.{ExecutionContext, Future}
 //   BuildChargingProfiles — dry-run compute without delivery
 // ---------------------------------------------------------------------------
 
-final class SmartChargingGrpcTransport(handler: SmartChargingGrpcHandler, rt: Runtime[Any])
-    extends SmartChargingServiceGrpc.SmartChargingService:
+final class SmartChargingGrpcTransport(
+    handler: SmartChargingGrpcHandler,
+    tracing: EvTracing,
+    rt: Runtime[Any]
+) extends SmartChargingServiceGrpc.SmartChargingService:
 
-  private def run[A](effect: Task[A]): Future[A] =
-    Unsafe.unsafe(implicit u => rt.unsafe.runToFuture(effect))
+  private def run[A](spanName: String)(effect: Task[A]): Future[A] =
+    Unsafe.unsafe(implicit u => rt.unsafe.runToFuture(tracing.spanTask(spanName)(effect)))
 
   override def triggerSmartCharging(req: ProtoTriggerRequest): Future[ProtoTriggerResponse] =
-    run(
+    run("smartcharging.triggerSmartCharging")(
       handler
         .triggerSmartCharging(TriggerSmartChargingRequestADT(
           tenantId = req.tenantId,
@@ -50,14 +54,14 @@ final class SmartChargingGrpcTransport(handler: SmartChargingGrpcHandler, rt: Ru
     )
 
   override def checkConnection(req: ProtoCheckConnectionRequest): Future[ProtoCheckConnectionResponse] =
-    run(
+    run("smartcharging.checkConnection")(
       handler
         .checkConnection(CheckConnectionRequestADT(tenantId = req.tenantId))
         .map(r => ProtoCheckConnectionResponse(connected = r.connected, error = r.error))
     )
 
   override def buildChargingProfiles(req: ProtoBuildRequest): Future[ProtoBuildResponse] =
-    run(
+    run("smartcharging.buildChargingProfiles")(
       handler
         .buildChargingProfiles(BuildChargingProfilesRequestADT(
           tenantId = req.tenantId,
@@ -81,12 +85,13 @@ final class SmartChargingGrpcTransport(handler: SmartChargingGrpcHandler, rt: Ru
 
 object SmartChargingGrpcTransport:
 
-  val start: RIO[SmartChargingGrpcHandler & SmartChargingConfig, Unit] =
+  val start: RIO[SmartChargingGrpcHandler & SmartChargingConfig & EvTracing, Unit] =
     for
       handler <- ZIO.service[SmartChargingGrpcHandler]
       cfg     <- ZIO.service[SmartChargingConfig]
+      tracing <- ZIO.service[EvTracing]
       rt      <- ZIO.runtime[Any]
-      impl = new SmartChargingGrpcTransport(handler, rt)
+      impl = new SmartChargingGrpcTransport(handler, tracing, rt)
       server <- ZIO.attempt(
         NettyServerBuilder
           .forPort(cfg.grpcPort)
