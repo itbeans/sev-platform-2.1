@@ -30,8 +30,8 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 | gRPC proto: `ocpp_gateway.proto` | ✅ | |
 | gRPC proto: `pricing_service.proto` | ✅ | |
 | gRPC proto: `billing_service.proto` | ✅ | GetInvoices + GetInvoice added |
-| gRPC proto: `smart_charging_service.proto` | ⬜ | |
-| gRPC proto: `car_service.proto` | ⬜ | |
+| gRPC proto: `smart_charging_service.proto` | ✅ | TriggerSmartCharging, CheckConnection, BuildChargingProfiles |
+| gRPC proto: `car_service.proto` | ✅ | GetUserDefaultCar, GetCurrentSoC |
 | 13 service `Main.scala` stubs (ZIO App structure) | ✅ | All 13 services have entry points |
 | OCPP Gateway: `ConnectionRegistry`, `OcppFrameHandler`, `OcppGatewayServer` stubs | ✅ | Structure only, not functional |
 | REST API: `ChargingStationEndpoints`, `TransactionEndpoints`, `UserEndpoints` stubs | ✅ | Return empty responses |
@@ -179,7 +179,7 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 | Kafka consumer: `smart-charging.triggers` (debounced per siteAreaId) | ✅ |
 | Kafka consumer: `asset.consumptions` | ✅ |
 | OCPP 2.1 `SetDERControl` / `AFRRSignal` via OCPP Gateway gRPC | ✅ |
-| gRPC server: `TriggerSmartCharging` | ✅ |
+| gRPC server: `TriggerSmartCharging`, `CheckConnection`, `BuildChargingProfiles` | ✅ | SmartChargingGrpcTransport starts Netty on grpcPort |
 | ZIO Schedule: fallback periodic compute | ✅ |
 | ZIO Test suite | ✅ |
 
@@ -241,8 +241,8 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 | WebSocket upgrade handler + subprotocol negotiation | ✅ | `ocpp2.1`, `ocpp2.0.1`, `ocpp1.6` |
 | Pending call registry (correlate CALLRESULT to CALL) | ✅ | `Ref[Map[uniqueId, PendingRequest]]` |
 | ConnectionRegistry with ZHub events + tenant isolation | ✅ | |
-| Sticky routing fallback (command delivery via Kafka when station on different pod) | ⬜ deferred | **Critical risk — Phase 5** |
-| gRPC server: `SendCommand`, `SendResponse`, `ListConnectedStations` | ⬜ deferred | |
+| Sticky routing fallback (command delivery via Kafka when station on different pod) | ✅ | CrossPodCommandRelay fan-out via Kafka |
+| gRPC server: `SendCommand`, `SendResponse`, `ListConnectedStations`, `IsStationConnected` | ✅ | OcppGatewayGrpcTransport, all 4 RPCs |
 | Load test: 1,000+ concurrent WebSocket connections | ⬜ deferred | Before production cutover |
 | ZIO Test suite (WebSocket lifecycle, frame parsing) | ✅ | |
 

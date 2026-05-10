@@ -68,6 +68,10 @@ object Main extends ZIOAppDefault:
           s"debounceSecs=${cfg.debounceSecs} " +
           s"periodicIntervalMins=${cfg.periodicIntervalMins}"
       )
+      // Start gRPC server
+      _ <- SmartChargingGrpcTransport.start
+        .tapError(err => ZIO.logError(s"gRPC server failed to start: ${err.getMessage}"))
+        .forkDaemon
       // Start both Kafka consumers in background (triggers + asset consumptions)
       _ <- consumer.start
         .tapError(err => ZIO.logError(s"Smart charging Kafka consumer error: ${err.getMessage}"))

@@ -18,7 +18,15 @@ import java.util.UUID
 // ---------------------------------------------------------------------------
 
 trait SmartChargingService:
-  def triggerOptimization(tenantId: String, siteAreaId: String, event: String): Task[Unit]
+  /** Compute, persist, and deliver profiles. Returns (profilesApplied, profilesFailed). */
+  def triggerOptimization(tenantId: String, siteAreaId: String, event: String): Task[(Int, Int)]
+
+  /** Compute profiles without persisting or delivering (dry-run). */
+  def buildChargingProfiles(
+      tenantId: String,
+      siteAreaId: String,
+      excludedStationIds: List[String]
+  ): Task[List[ChargingProfile]]
 
 final class LiveSmartChargingService(
     repo: SmartChargingRepository,
@@ -27,7 +35,7 @@ final class LiveSmartChargingService(
     cfg: SmartChargingConfig
 ) extends SmartChargingService:
 
-  def triggerOptimization(tenantId: String, siteAreaId: String, event: String): Task[Unit] =
+  def triggerOptimization(tenantId: String, siteAreaId: String, event: String): Task[(Int, Int)] =
     for
       siteAreaOpt <- repo.findSiteArea(tenantId, siteAreaId)
       siteArea <- ZIO.fromOption(siteAreaOpt)
@@ -38,31 +46,45 @@ final class LiveSmartChargingService(
       )
       txs <- repo.findActiveTransactions(tenantId, siteAreaId)
       _   <- ZIO.logDebug(s"[SmartCharging] Active transactions: ${txs.size}")
-      // Build the optimizer request from site area + transactions
       request = buildRequest(siteArea, txs, event)
-      // Call the SAP optimizer
       result <- optimizer.optimize(request)
         .tapError(err =>
           ZIO.logError(
             s"[SmartCharging] SAP optimizer call failed for $siteAreaId: ${err.getMessage}"
           )
         )
-      // Convert optimizer output → ChargingProfile, persist, then deliver to stations
       profiles = buildProfiles(tenantId, siteAreaId, siteArea.siteId, txs, result, siteArea)
       _ <- ZIO.foreach(profiles)(repo.saveProfile)
-      _ <- ZIO.foreach(profiles) { profile =>
+      deliveryResults <- ZIO.foreach(profiles) { profile =>
         gatewayClient.deliverChargingProfile(tenantId, profile)
           .tapError(err =>
             ZIO.logWarning(
               s"[SmartCharging] Failed to deliver profile to ${profile.chargingStationId}: ${err.getMessage}"
             )
           )
-          .ignore
+          .fold(_ => false, identity)
       }
+      applied = deliveryResults.count(identity)
+      failed  = deliveryResults.count(!_)
       _ <- ZIO.logInfo(
-        s"[SmartCharging] Applied and delivered ${profiles.size} charging profiles for $siteAreaId"
+        s"[SmartCharging] Applied $applied, failed $failed charging profiles for $siteAreaId"
       )
-    yield ()
+    yield (applied, failed)
+
+  def buildChargingProfiles(
+      tenantId: String,
+      siteAreaId: String,
+      excludedStationIds: List[String]
+  ): Task[List[ChargingProfile]] =
+    for
+      siteAreaOpt <- repo.findSiteArea(tenantId, siteAreaId)
+      siteArea <- ZIO.fromOption(siteAreaOpt)
+        .orElseFail(new Exception(s"SiteArea $siteAreaId not found for tenant $tenantId"))
+      txs <- repo.findActiveTransactions(tenantId, siteAreaId)
+      filteredTxs = txs.filterNot(tx => excludedStationIds.contains(tx.chargingStationId))
+      request = buildRequest(siteArea, filteredTxs, "Reoptimize")
+      result  <- optimizer.optimize(request)
+    yield buildProfiles(tenantId, siteAreaId, siteArea.siteId, filteredTxs, result, siteArea)
 
   // ── Build OptimizerRequest ────────────────────────────────────────────
 

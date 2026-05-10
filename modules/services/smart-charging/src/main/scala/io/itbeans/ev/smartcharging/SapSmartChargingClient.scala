@@ -31,6 +31,8 @@ import java.util.Base64
 
 trait SapSmartChargingClient:
   def optimize(request: OptimizerRequest): Task[OptimizerResult]
+  /** Returns true if the SAP optimizer endpoint is reachable (any HTTP response). */
+  def checkConnection: Task[Boolean]
 
 final class LiveSapSmartChargingClient(cfg: SmartChargingConfig) extends SapSmartChargingClient:
 
@@ -59,6 +61,17 @@ final class LiveSapSmartChargingClient(cfg: SmartChargingConfig) extends SapSmar
       val resp = http.send(req, HttpResponse.BodyHandlers.ofString())
       parseResponse(resp)
     }
+
+  def checkConnection: Task[Boolean] =
+    ZIO.attemptBlocking {
+      val req = HttpRequest.newBuilder(URI.create(cfg.optimizerUrl))
+        .GET()
+        .timeout(Duration.ofSeconds(5))
+        .header("Authorization", authHeader)
+        .build()
+      val resp = http.send(req, HttpResponse.BodyHandlers.discarding())
+      resp.statusCode() < 500
+    }.catchAll(_ => ZIO.succeed(false))
 
   private def parseResponse(resp: HttpResponse[String]): OptimizerResult =
     val body = resp.body()
