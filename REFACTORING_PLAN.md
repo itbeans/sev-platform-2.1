@@ -286,9 +286,9 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 | Kubernetes HPA config (OCPP Gateway: scale on WS connections) | ✅ | KEDA ScaledObject on `gateway_connected_stations` gauge + secondary CPU trigger; standard HPA as fallback when KEDA disabled |
 | Istio service mesh (mTLS, canary VirtualServices, circuit breaking) | ✅ | `ev-istio` chart: PeerAuthentication (STRICT + port-8888 PERMISSIVE for Prometheus), DestinationRule per service (ISTIO_MUTUAL + outlier detection), VirtualService per service (canary weight 0→100 via `canaryWeight` value), AuthorizationPolicy per service (call-graph allow-lists); dedicated ServiceAccount per service for SPIFFE identity |
 | ArgoCD GitOps setup | ⬜ | |
-| Data migration scripts: MongoDB billing → PostgreSQL | ⬜ | Phase 3 |
-| Data migration scripts: MongoDB consumptions → TimescaleDB | ⬜ | Phase 4 |
-| Data migration scripts: MongoDB logs → TimescaleDB | ⬜ | Phase 4 |
+| Data migration scripts: MongoDB billing → PostgreSQL | ✅ | `scripts/migrate-billing.sh`: 4 collections (invoices, accounts, transfers, users); ISODate→epoch-ms in mongosh; sessions[] serialised as JSON text; idempotent ON CONFLICT upsert; `--tenant`, `--dry-run`, `--from` flags |
+| Data migration scripts: MongoDB consumptions → TimescaleDB | ✅ | `scripts/migrate-consumptions.sh`: batch COPY with ON CONFLICT upsert on (time, tenant_id, transaction_id); hourly continuous aggregate refreshed post-migration; 2-year retention policy |
+| Data migration scripts: MongoDB logs → TimescaleDB | ✅ | `scripts/migrate-logs.sh`: batch COPY into `audit_logs` hypertable; ON CONFLICT DO NOTHING; configurable `--retain-days`; indexes on source, level, station_id |
 | Authorization regression test matrix (full 23×4 grid, both TS and Scala) | ✅ | `RbacMatrixSpec.scala` — 552 entries (6 roles × 23 resources × 4 actions); data-driven `List[(UserRole, Resource, Action, Boolean)]`; complemented by existing `CasbinAuthorizationServiceSpec` (OCPP commands, ABAC filters) |
 | Billing calculation parity golden dataset test | ✅ | `BillingParitySpec.scala` + `golden-transactions.json`; covers ENERGY, FLAT_FEE_PLUS_ENERGY, TIME_PLUS_ENERGY, ENERGY_PLUS_PARKING tariff types |
 | OCPP 1.6 TypeScript SOAP bridge → Kafka adapter | ⬜ | Remains as bridge indefinitely |
@@ -324,8 +324,8 @@ Listed by severity. Items marked ✅ have been fixed.
 | Phase 2: Low-risk services | Notification, Car, Pricing, Asset | ~18% | ✅ **100% done** (Kong cutover deferred to ops) |
 | Phase 3: Core services | Auth, Roaming, Billing | ~22% | ✅ **100% done** (canary cutover deferred to ops) |
 | Phase 4: Real-time core | Smart Charging, Scheduler, Analytics, REST API, OCPP Gateway, OCPP Processor | ~52% | ✅ **100% done** (OCPP 1.6/2.x SOAP bridge deferred) |
-| Cross-cutting | Casbin, Helm, Istio, data migrations, test suites | ~10% (distributed) | 🔄 ~95% (Casbin/ABAC ✅, ZIO Test suites ✅, OTel ✅, Prometheus ✅, RBAC matrix ✅, billing parity ✅, Helm charts ✅, Istio mesh ✅ — data migrations deferred) |
-| **Total** | | **100%** | **~99% done** |
+| Cross-cutting | Casbin, Helm, Istio, data migrations, test suites | ~10% (distributed) | ✅ **100%** (Casbin/ABAC ✅, ZIO Test suites ✅, OTel ✅, Prometheus ✅, RBAC matrix ✅, billing parity ✅, Helm charts ✅, Istio mesh ✅, data migrations ✅) |
+| **Total** | | **100%** | **100% done** — all planned implementation complete; ops handoff items (Kong cutover, ArgoCD, TypeScript decommission) remain |
 
 ---
 
