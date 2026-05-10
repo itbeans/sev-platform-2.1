@@ -291,7 +291,7 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 | Kubernetes Helm charts (per service + umbrella) | ✅ | `ev-common` library chart (deployment, service, hpa, pdb helpers); 13 service charts refactored to 1-line includes; PodDisruptionBudget for all; CPU+memory HPA for 12; KEDA ScaledObject for gateway |
 | Kubernetes HPA config (OCPP Gateway: scale on WS connections) | ✅ | KEDA ScaledObject on `gateway_connected_stations` gauge + secondary CPU trigger; standard HPA as fallback when KEDA disabled |
 | Istio service mesh (mTLS, canary VirtualServices, circuit breaking) | ✅ | `ev-istio` chart: PeerAuthentication (STRICT + port-8888 PERMISSIVE for Prometheus), DestinationRule per service (ISTIO_MUTUAL + outlier detection), VirtualService per service (canary weight 0→100 via `canaryWeight` value), AuthorizationPolicy per service (call-graph allow-lists); dedicated ServiceAccount per service for SPIFFE identity |
-| ArgoCD GitOps setup | ⬜ | ops task — Application CR pointing at `helm/umbrella` on `main`; see Ops Handoff section |
+| ArgoCD GitOps setup | ✅ | `argocd/` App-of-Apps: AppProject, root Application CR, 13 per-service Application CRs with staging/production value overlays; `image-tags.yaml` auto-updated by CI on every push to main |
 | Data migration scripts: MongoDB billing → PostgreSQL | ✅ | `scripts/migrate-billing.sh`: 4 collections (invoices, accounts, transfers, users); ISODate→epoch-ms in mongosh; sessions[] serialised as JSON text; idempotent ON CONFLICT upsert; `--tenant`, `--dry-run`, `--from` flags |
 | Data migration scripts: MongoDB consumptions → TimescaleDB | ✅ | `scripts/migrate-consumptions.sh`: batch COPY with ON CONFLICT upsert on (time, tenant_id, transaction_id); hourly continuous aggregate refreshed post-migration; 2-year retention policy |
 | Data migration scripts: MongoDB logs → TimescaleDB | ✅ | `scripts/migrate-logs.sh`: batch COPY into `audit_logs` hypertable; ON CONFLICT DO NOTHING; configurable `--retain-days`; indexes on source, level, station_id |
@@ -330,7 +330,7 @@ Listed by severity. Items marked ✅ have been fixed.
 | Phase 2: Low-risk services | Notification, Car, Pricing, Asset | ~18% | ✅ **100% done** (Kong cutover deferred to ops) |
 | Phase 3: Core services | Auth, Roaming, Billing | ~22% | ✅ **100% done** (canary cutover deferred to ops) |
 | Phase 4: Real-time core | Smart Charging, Scheduler, Analytics, REST API, OCPP Gateway, OCPP Processor | ~52% | ✅ **100% done** (OCPP 1.6/2.x SOAP bridge deferred) |
-| Cross-cutting | Casbin, Helm, Istio, data migrations, test suites | ~10% (distributed) | ✅ **100%** (Casbin/ABAC ✅, ZIO Test suites ✅, OTel ✅, Prometheus ✅, RBAC matrix ✅, billing parity ✅, Helm charts ✅, Istio mesh ✅, data migrations ✅) |
+| Cross-cutting | Casbin, Helm, Istio, ArgoCD, CI, data migrations, test suites | ~10% (distributed) | ✅ **100%** (Casbin/ABAC ✅, ZIO Test suites ✅, OTel ✅, Prometheus ✅, RBAC matrix ✅, billing parity ✅, Helm charts ✅, Istio mesh ✅, ArgoCD App-of-Apps ✅, GitHub Actions CI ✅, data migrations ✅) |
 | **Total** | | **100%** | **100% done** — all planned implementation complete; ops handoff items (Kong cutover, ArgoCD, TypeScript decommission) remain |
 
 ---

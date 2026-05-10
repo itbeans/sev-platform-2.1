@@ -18,6 +18,10 @@ ThisBuild / scalacOptions ++= Seq(
 
 ThisBuild / testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
 
+ThisBuild / coverageMinimumStmtTotal  := 70
+ThisBuild / coverageFailOnMinimum     := true
+ThisBuild / coverageExcludedPackages  := "io\\.itbeans\\.ev\\.proto\\..*;.*\\.Main;.*Config"
+
 // Enable semantic DB for scalafix
 ThisBuild / semanticdbEnabled := true
 ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
