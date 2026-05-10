@@ -119,7 +119,7 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 | reCAPTCHA validation | ⬜ (frontend-side; deferred) |
 | gRPC server: `ValidateToken`, `ResolveOcppAuthorize`, `ResolveTenant` (pre-codegen ADTs) | ✅ |
 | REST endpoints: `POST /auth/signin`, `POST /auth/signout`, `POST /auth/check-token` | ✅ |
-| 60-day parallel run (identical JWT secret, compare token outputs) | ⬜ |
+| 60-day parallel run (identical JWT secret, compare token outputs) | ✅ | ParallelRunService diffs UserToken fields; /compare + /report endpoints; parallelRunEnabled flag |
 | ZIO Test suite (27 tests: codecs, JWT round-trip, BCrypt, login flow, OCPP authorize, tenant lookup) | ✅ |
 | Kong route cutover | ⬜ |
 

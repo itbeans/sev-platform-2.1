@@ -37,26 +37,32 @@ object Main extends ZIOAppDefault:
       MongoTenantRepository.live,
       MongoTagRepository.live,
       MongoUserSiteRepository.live,
+      MongoParallelRunRepository.live,
       // ── Application layers ─────────────────────────────────────────────
       TokenService.live,
+      ParallelRunService.live,
       AuthGrpcHandler.live,
       // ── HTTP server (port 8080) ─────────────────────────────────────────
       Server.defaultWithPort(8080)
     )
 
   private val program: ZIO[
-    UserRepository & TenantRepository & TagRepository & TokenService & AuthGrpcHandler & Server & AuthConfig,
+    UserRepository & TenantRepository & TagRepository & TokenService &
+      ParallelRunService & AuthGrpcHandler & Server & AuthConfig,
     Throwable,
     Unit
   ] =
     for
-      cfg        <- ZIO.service[AuthConfig]
-      userRepo   <- ZIO.service[UserRepository]
-      tenantRepo <- ZIO.service[TenantRepository]
-      tokenSvc   <- ZIO.service[TokenService]
+      cfg           <- ZIO.service[AuthConfig]
+      userRepo      <- ZIO.service[UserRepository]
+      tenantRepo    <- ZIO.service[TenantRepository]
+      tokenSvc      <- ZIO.service[TokenService]
+      parallelRunSvc <- ZIO.service[ParallelRunService]
       _ <- ZIO.logInfo(
-        s"ev-auth-service starting: http=:${cfg.httpPort} grpc=:${cfg.grpcPort}"
+        s"ev-auth-service starting: http=:${cfg.httpPort} grpc=:${cfg.grpcPort} " +
+          s"parallelRun=${cfg.parallelRunEnabled}"
       )
       _ <- AuthGrpcTransport.start
-      _ <- Server.serve(AuthHttpServer.routes(userRepo, tenantRepo, tokenSvc, cfg))
+      parallelRunOpt = if cfg.parallelRunEnabled then Some(parallelRunSvc) else None
+      _ <- Server.serve(AuthHttpServer.routes(userRepo, tenantRepo, tokenSvc, parallelRunOpt, cfg))
     yield ()

@@ -7,7 +7,7 @@ import sttp.tapir.ztapir._
 import zio._
 import zio.http.{Response, Routes}
 
-import java.time.Instant
+import java.time.{Instant, ZoneOffset, ZonedDateTime}
 
 // ---------------------------------------------------------------------------
 // AuthHttpServer — wires Tapir auth endpoints to ZIO HTTP routes.
@@ -29,9 +29,10 @@ object AuthHttpServer:
       userRepo: UserRepository,
       tenantRepo: TenantRepository,
       tokenSvc: TokenService,
+      parallelRunSvc: Option[ParallelRunService],
       cfg: AuthConfig
   ): Routes[Any, Response] =
-    ZioHttpInterpreter().toHttp(List(
+    val coreEndpoints = List(
       AuthEndpoints.signIn.zServerLogic { body =>
         signIn(body, userRepo, tenantRepo, tokenSvc, cfg).mapError(_.getMessage)
       },
@@ -43,7 +44,22 @@ object AuthHttpServer:
           .map(t => CheckTokenResponse(valid = true, userTokenJson = Some(t.asJson.noSpaces)))
           .catchAll(_ => ZIO.succeed(CheckTokenResponse(valid = false, userTokenJson = None)))
       }
-    ))
+    )
+    val parallelRunEndpoints = parallelRunSvc.toList.flatMap { svc =>
+      List(
+        ParallelRunEndpoints.compare.zServerLogic { req =>
+          svc.compare(req.tenant, req.email, req.tsToken)
+            .map(r => ParallelRunCompareResponse(r.matched, r.diffCount, r.diffs))
+            .mapError(_.getMessage)
+        },
+        ParallelRunEndpoints.report.zServerLogic { case (tenant, fromMs, toMs) =>
+          val from = Instant.ofEpochMilli(fromMs)
+          val to   = Instant.ofEpochMilli(toMs)
+          svc.buildReport(tenant, from, to).mapError(_.getMessage)
+        }
+      )
+    }
+    ZioHttpInterpreter().toHttp(coreEndpoints ++ parallelRunEndpoints)
 
   // ── Login logic ───────────────────────────────────────────────────────────
 
