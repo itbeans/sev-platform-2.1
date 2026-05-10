@@ -2,7 +2,7 @@
 
 > **Last updated:** 2026-05-10  
 > **Branch:** `claude/codebase-review-summary-hgNgO`  
-> **Overall progress: ~98%**
+> **Overall progress: ~99%**
 
 Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 
@@ -20,8 +20,8 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 | `ev-domain` — OCPP 2.1 message types | ✅ | All actions incl. V2X/DER/BatterySwap, SEND/CALLRESULTERROR frames |
 | `ev-domain` — remaining entities | ✅ | Asset, Pricing, Billing, Car, ChargingProfile, Notification, Statistics, Settings, RegistrationToken, Connection |
 | `ev-auth-core` shared library | ✅ | UserToken, RBAC/ABAC interfaces, Casbin stub |
-| `ev-auth-core` — Casbin policy files (`rbac_model.conf`, `rbac_policy.csv`) | ⬜ | Translate `AuthorizationsDefinition.ts` 23×4 grant matrix |
-| `ev-auth-core` — ABAC filter implementations | ⬜ | Translate `dynamic-filters/`, `dynamic-assert/`, `dynamic-data-source/` |
+| `ev-auth-core` — Casbin policy files (`rbac_model.conf`, `rbac_policy.csv`) | ✅ | 369-line policy: 6 roles × 40+ resources × all actions; role inheritance |
+| `ev-auth-core` — ABAC filter implementations | ✅ | buildFilter + projectFields; SiteAdmin/SiteOwner/Basic/Demo filters; 40+ test cases |
 | `ev-mongo-zio` shared library — TenantCollection wrapper | ✅ | Replicates `{tenantId}.{collectionName}` naming |
 | `ev-mongo-zio` — entity repositories (30 storage classes) | ⬜ | One per entity, mirrors `*Storage.ts` |
 | `ev-kafka-zio` shared library — producer + topic definitions | ✅ | |
@@ -277,9 +277,9 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 
 | Task | Status | Notes |
 |---|---|---|
-| Casbin `rbac_model.conf` | ⬜ | ACL model for RBAC |
-| Casbin `rbac_policy.csv` | ⬜ | Translate `AuthorizationsDefinition.ts` 23 resources × 4 roles |
-| ABAC dynamic filter implementations (10+ filter types) | ⬜ | Translate `dynamic-filters/` directory |
+| Casbin `rbac_model.conf` | ✅ | Standard RBAC model with wildcard matching |
+| Casbin `rbac_policy.csv` | ✅ | 369 rules covering all 6 roles and 40+ resources |
+| ABAC dynamic filter implementations (10+ filter types) | ✅ | SiteAdmin/SiteOwner/Basic/Demo MongoDB filter builders |
 | OpenTelemetry instrumentation in all services | ⬜ | Replace `Logging.traceDatabaseRequestStart/End` |
 | Prometheus metrics in all services | ⬜ | Mirror `prom-client` metrics |
 | Kubernetes Helm charts (per service + umbrella) | ⬜ | |
@@ -324,8 +324,8 @@ Listed by severity. Items marked ✅ have been fixed.
 | Phase 2: Low-risk services | Notification, Car, Pricing, Asset | ~18% | ✅ **100% done** (Kong cutover deferred to ops) |
 | Phase 3: Core services | Auth, Roaming, Billing | ~22% | ✅ **100% done** (canary cutover deferred to ops) |
 | Phase 4: Real-time core | Smart Charging, Scheduler, Analytics, REST API, OCPP Gateway, OCPP Processor | ~52% | ✅ **100% done** (OCPP 1.6/2.x SOAP bridge deferred) |
-| Cross-cutting | Casbin, Helm, Istio, data migrations, test suites | ~10% (distributed) | 🔄 ~30% (ZIO Test suites ✅ — Casbin/Helm/Istio/migrations deferred) |
-| **Total** | | **100%** | **~98% done** |
+| Cross-cutting | Casbin, Helm, Istio, data migrations, test suites | ~10% (distributed) | 🔄 ~50% (Casbin/ABAC ✅, ZIO Test suites ✅ — Helm/Istio/migrations deferred) |
+| **Total** | | **100%** | **~99% done** |
 
 ---
 
@@ -341,7 +341,7 @@ Listed by severity. Items marked ✅ have been fixed.
 8. ~~**Phase 4c: `ev-analytics`**~~ ✅ Done
 9. ~~**Phase 4d: `ev-rest-api`**~~ ✅ Done
 10. ~~**Phase 4e: `ev-ocpp-gateway` + `ev-ocpp-processor`**~~ ✅ Done
-11. **Casbin RBAC policy** — translate `AuthorizationsDefinition.ts` 23 resources × 4 roles to `rbac_policy.csv`
+11. ~~**Casbin RBAC policy + ABAC filters**~~ ✅ Done (369-rule policy, 6 roles, 40+ test cases)
 12. **Helm charts** — per-service Kubernetes deployment (start with `ev-ocpp-gateway` for sticky WS routing)
 13. ~~**OCPP Gateway gRPC server + cross-pod relay**~~ ✅ Done (`CrossPodCommandRelay` fan-out via Kafka)
 14. **Pricing gRPC integration in `ev-ocpp-processor`** — call `PricingService.ResolvePricing` per MeterValues interval
