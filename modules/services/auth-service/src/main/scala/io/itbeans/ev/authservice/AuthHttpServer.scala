@@ -70,7 +70,7 @@ object AuthHttpServer:
       tokenSvc: TokenService,
       cfg: AuthConfig
   ): Task[SignInResponse] =
-    for
+    (for
       // 1. Resolve tenant
       tenant <- resolveTenant(body.tenant, tenantRepo, cfg)
       tenantId = TenantId(tenant.id)
@@ -107,7 +107,9 @@ object AuthHttpServer:
 
       // 8. Issue JWT
       token <- tokenSvc.issueToken(tenantId, user, tenant)
-    yield SignInResponse(token)
+      _     <- Metric.counter("auth.signin.success").increment
+    yield SignInResponse(token))
+      .tapError(_ => Metric.counter("auth.signin.failure").increment)
 
   private def resolveTenant(
       subdomain: String,

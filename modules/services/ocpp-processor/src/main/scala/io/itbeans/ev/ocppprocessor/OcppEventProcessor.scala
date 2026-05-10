@@ -72,6 +72,7 @@ final class OcppEventProcessor(
         json.hcursor.downField("action").as[String]
       ).mapError(e => new Exception(e.message))
       _ <- ZIO.logDebug(s"[Processor] $action from $stationId ($tenantIdStr)")
+      _ <- Metric.counter("ocpp.events.total").tagged("action", action).increment
       _ <- action match
         case "BootNotification"              => handleBootNotification(json, tenantId, stationId)
         case "Heartbeat"                     => handleHeartbeat(json, tenantId, stationId)

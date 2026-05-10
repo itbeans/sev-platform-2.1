@@ -5,7 +5,10 @@ import io.itbeans.ev.otel.{EvTracing, OtelConfig, OtelLayer}
 import org.mongodb.scala.MongoClient
 import zio._
 import zio.config.typesafe.TypesafeConfigProvider
+import zio.http._
 import zio.logging.backend.SLF4J
+import zio.metrics.connectors.{prometheus, MetricsConfig}
+import zio.metrics.connectors.prometheus.PrometheusPublisher
 
 // ---------------------------------------------------------------------------
 // ev-rest-api — Dashboard HTTP API (Tapir endpoints + OpenAPI/Swagger).
@@ -37,10 +40,19 @@ object Main extends ZIOAppDefault:
       )
     )
 
+  private val metricsServer: ZIO[PrometheusPublisher, Throwable, Any] =
+    ZIO.serviceWithZIO[PrometheusPublisher] { publisher =>
+      Server
+        .serve(Routes(Method.GET / "metrics" ->
+          Handler.fromZIO(publisher.get.map(Response.text))))
+        .provide(Server.defaultWithPort(8888))
+        .forkDaemon
+    }
+
   // ── Full application layer graph ──────────────────────────────────────────
 
   override def run: ZIO[ZIOAppArgs & Scope, Any, Any] =
-    program.provide(
+    (metricsServer *> program).provide(
       Runtime.setConfigProvider(TypesafeConfigProvider.fromResourcePath()),
       // Config
       ZLayer.fromZIO(ZIO.config[RestApiConfig]),
@@ -57,7 +69,10 @@ object Main extends ZIOAppDefault:
       OcppGatewayGrpcClient.live,
       BillingGrpcClient.live,
       // REST server
-      RestApiServer.live
+      RestApiServer.live,
+      ZLayer.succeed(MetricsConfig(5.seconds)),
+      prometheus.publisherLayer,
+      prometheus.prometheusLayer
     )
 
   private val program: ZIO[RestApiConfig & RestApiServer, Throwable, Unit] =

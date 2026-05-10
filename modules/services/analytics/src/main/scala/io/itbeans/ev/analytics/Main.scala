@@ -4,8 +4,10 @@ import io.itbeans.ev.kafka.KafkaConfig
 import io.itbeans.ev.otel.{EvTracing, OtelConfig, OtelLayer}
 import zio._
 import zio.config.typesafe.TypesafeConfigProvider
-import zio.http.Server
+import zio.http._
 import zio.logging.backend.SLF4J
+import zio.metrics.connectors.{prometheus, MetricsConfig}
+import zio.metrics.connectors.prometheus.PrometheusPublisher
 
 // ---------------------------------------------------------------------------
 // ev-analytics — Audit logs + consumption statistics via TimescaleDB.
@@ -28,8 +30,17 @@ object Main extends ZIOAppDefault:
 
   // AnalyticsConfig.given defined in companion
 
+  private val metricsServer: ZIO[PrometheusPublisher, Throwable, Any] =
+    ZIO.serviceWithZIO[PrometheusPublisher] { publisher =>
+      Server
+        .serve(Routes(Method.GET / "metrics" ->
+          Handler.fromZIO(publisher.get.map(Response.text))))
+        .provide(Server.defaultWithPort(8888))
+        .forkDaemon
+    }
+
   override def run: ZIO[ZIOAppArgs & Scope, Any, Any] =
-    program.provide(
+    (metricsServer *> program).provide(
       Runtime.setConfigProvider(TypesafeConfigProvider.fromResourcePath()),
       // ── Config layers ──────────────────────────────────────────────────
       ZLayer.fromZIO(ZIO.config[KafkaConfig]),
@@ -43,7 +54,10 @@ object Main extends ZIOAppDefault:
       // ── Kafka consumer ─────────────────────────────────────────────────
       LiveAnalyticsKafkaConsumer.live,
       // ── HTTP server ────────────────────────────────────────────────────
-      Server.defaultWithPort(8080)
+      Server.defaultWithPort(8080),
+      ZLayer.succeed(MetricsConfig(5.seconds)),
+      prometheus.publisherLayer,
+      prometheus.prometheusLayer
     )
 
   private val program: ZIO[

@@ -161,7 +161,7 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 | gRPC transport `BillingGrpcTransport.scala` — all 14 RPCs bridged to services | ✅ | gRPC server starts on `billing.grpcPort` |
 | REST endpoints: webhook, invoices list, customer create, account CRUD | ✅ |
 | ZIO Test suite (21 tests: codecs, repository CRUD, dimension calculations) | ✅ |
-| Billing parity test suite (golden historical dataset) | ⬜ |
+| Billing parity test suite (golden historical dataset) | ✅ |
 | Kong route cutover | ⬜ |
 
 ---
@@ -229,7 +229,7 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 | `LogsEndpoints` (proxy to ev-analytics) | ✅ | `LogService.ts` |
 | RestApiCodecs (opaque type circe+Tapir instances) | ✅ | |
 | SwaggerUI via Tapir `SwaggerInterpreter` | ✅ | |
-| Full authorization test matrix (23×4 RBAC grid) | ⬜ deferred |
+| Full authorization test matrix (23×4 RBAC grid) | ✅ | `RbacMatrixSpec.scala` in `ev-auth-core` |
 | Pact contract tests | ⬜ deferred |
 | Kong route cutover | ⬜ deferred |
 
@@ -281,7 +281,7 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 | Casbin `rbac_policy.csv` | ✅ | 369 rules covering all 6 roles and 40+ resources |
 | ABAC dynamic filter implementations (10+ filter types) | ✅ | SiteAdmin/SiteOwner/Basic/Demo MongoDB filter builders |
 | OpenTelemetry instrumentation in all services | ✅ | `ev-otel-zio` module: `EvTracing` service + `OtelLayer`; spans on all 6 gRPC transports; wired in all 13 service Main.scala files; disabled by default (`otel.enabled=false`) |
-| Prometheus metrics in all services | ⬜ | Mirror `prom-client` metrics |
+| Prometheus metrics in all services | ✅ | `zio-metrics-connectors-prometheus`; dedicated `/metrics` server on port 8888 in all 13 services; `auth.signin.success/failure` counters in auth-service; `ocpp.events.total{action}` counter in ocpp-processor |
 | Kubernetes Helm charts (per service + umbrella) | ⬜ | |
 | Kubernetes HPA config (OCPP Gateway: scale on WS connections) | ⬜ | |
 | Istio service mesh (mTLS, canary VirtualServices, circuit breaking) | ⬜ | Phase 2+ |
@@ -289,8 +289,8 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 | Data migration scripts: MongoDB billing → PostgreSQL | ⬜ | Phase 3 |
 | Data migration scripts: MongoDB consumptions → TimescaleDB | ⬜ | Phase 4 |
 | Data migration scripts: MongoDB logs → TimescaleDB | ⬜ | Phase 4 |
-| Authorization regression test matrix (full 23×4 grid, both TS and Scala) | ⬜ | Before Auth Service cutover |
-| Billing calculation parity golden dataset test | ⬜ | Before Pricing cutover |
+| Authorization regression test matrix (full 23×4 grid, both TS and Scala) | ✅ | `RbacMatrixSpec.scala` — 552 entries (6 roles × 23 resources × 4 actions); data-driven `List[(UserRole, Resource, Action, Boolean)]`; complemented by existing `CasbinAuthorizationServiceSpec` (OCPP commands, ABAC filters) |
+| Billing calculation parity golden dataset test | ✅ | `BillingParitySpec.scala` + `golden-transactions.json`; covers ENERGY, FLAT_FEE_PLUS_ENERGY, TIME_PLUS_ENERGY, ENERGY_PLUS_PARKING tariff types |
 | OCPP 1.6 TypeScript SOAP bridge → Kafka adapter | ⬜ | Remains as bridge indefinitely |
 | TypeScript monolith decommission checklist | ⬜ | Final phase |
 
@@ -324,7 +324,7 @@ Listed by severity. Items marked ✅ have been fixed.
 | Phase 2: Low-risk services | Notification, Car, Pricing, Asset | ~18% | ✅ **100% done** (Kong cutover deferred to ops) |
 | Phase 3: Core services | Auth, Roaming, Billing | ~22% | ✅ **100% done** (canary cutover deferred to ops) |
 | Phase 4: Real-time core | Smart Charging, Scheduler, Analytics, REST API, OCPP Gateway, OCPP Processor | ~52% | ✅ **100% done** (OCPP 1.6/2.x SOAP bridge deferred) |
-| Cross-cutting | Casbin, Helm, Istio, data migrations, test suites | ~10% (distributed) | 🔄 ~50% (Casbin/ABAC ✅, ZIO Test suites ✅ — Helm/Istio/migrations deferred) |
+| Cross-cutting | Casbin, Helm, Istio, data migrations, test suites | ~10% (distributed) | 🔄 ~75% (Casbin/ABAC ✅, ZIO Test suites ✅, OTel ✅, Prometheus ✅, RBAC matrix ✅, billing parity ✅ — Helm/Istio/migrations deferred) |
 | **Total** | | **100%** | **~99% done** |
 
 ---
