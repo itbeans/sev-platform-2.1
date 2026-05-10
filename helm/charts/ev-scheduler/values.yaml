@@ -34,6 +34,7 @@ autoscaling:
   minReplicas: 1
   maxReplicas: 1
   targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
 
 env:
   LOG_LEVEL: "INFO"
@@ -42,3 +43,7 @@ env:
 
 envFromSecrets:
   - ev-scheduler-secrets   # MONGO_URI, KAFKA_BOOTSTRAP
+
+# Seconds the kubelet waits after SIGTERM before sending SIGKILL.
+# Must be > the preStop sleep (5 s) + max request duration.
+terminationGracePeriodSeconds: 60

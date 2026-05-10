@@ -45,6 +45,7 @@ autoscaling:
   minReplicas: 3
   maxReplicas: 20
   targetCPUUtilizationPercentage: 60
+  targetMemoryUtilizationPercentage: 70
 
 env:
   GATEWAY_HTTP_PORT: "8010"
@@ -57,3 +58,17 @@ env:
 
 envFromSecrets:
   - ev-ocpp-gateway-secrets   # KAFKA_BOOTSTRAP_SERVERS, JWT_SECRET
+
+# Seconds the kubelet waits after SIGTERM before SIGKILL.
+# Higher than other services — OCPP spec requires the gateway to drain
+# open WebSocket connections gracefully (stations wait up to 30 s before reconnect).
+terminationGracePeriodSeconds: 90
+
+# KEDA — scale on live WebSocket connection count instead of CPU.
+# Set enabled: true once the KEDA operator is installed in the cluster.
+keda:
+  enabled: false
+  # Prometheus URL reachable from within the cluster
+  prometheusUrl: http://prometheus-operated.monitoring:9090
+  # Target connections per pod before a new pod is added
+  connectionsPerPod: "300"

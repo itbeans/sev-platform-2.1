@@ -4,3 +4,8 @@ description: Car catalog sync and OCPP 2.1 V2X car connector integrations
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
+
+dependencies:
+  - name: ev-common
+    version: "0.1.0"
+    repository: "file://../ev-common"
