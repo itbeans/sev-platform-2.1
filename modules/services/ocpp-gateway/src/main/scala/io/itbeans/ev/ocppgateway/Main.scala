@@ -38,6 +38,8 @@ object Main extends ZIOAppDefault:
       ConnectionRegistry.live,
       // Frame handler (JSON parse + Kafka publish)
       OcppFrameHandler.live,
+      // Cross-pod command relay (fan-out Kafka consumers, one per pod)
+      CrossPodCommandRelay.live,
       // In-process auth (Casbin RBAC/ABAC)
       CasbinAuthorizationService.live,
       // Prometheus metrics (5-second scrape interval)
@@ -48,13 +50,20 @@ object Main extends ZIOAppDefault:
       OcppGatewayServer.live
     )
 
-  private val program: ZIO[GatewayConfig & OcppGatewayServer & ConnectionRegistry & OcppFrameHandler, Throwable, Unit] =
+  private val program: ZIO[
+    GatewayConfig & OcppGatewayServer & ConnectionRegistry & OcppFrameHandler & CrossPodCommandRelay,
+    Throwable,
+    Unit
+  ] =
     for
       cfg    <- ZIO.service[GatewayConfig]
       server <- ZIO.service[OcppGatewayServer]
+      relay  <- ZIO.service[CrossPodCommandRelay]
       _ <- ZIO.logInfo(
         s"ev-ocpp-gateway starting: ws=:${cfg.httpPort} grpc=:${cfg.grpcPort}"
       )
+      _ <- ZIO.scoped(relay.startCommandConsumer).forkDaemon  // fan-out: relay inbound commands
+      _ <- ZIO.scoped(relay.startResponseConsumer).forkDaemon // fan-out: relay responses
       _ <- OcppGatewayGrpcTransport.start // start Netty gRPC server (non-blocking)
       _ <- server.start                   // start ZIO HTTP WebSocket server (blocks)
     yield ()

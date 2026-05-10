@@ -1,8 +1,8 @@
 # ev-server Scala Microservices Refactoring — Living Progress Plan
 
-> **Last updated:** 2026-05-09  
+> **Last updated:** 2026-05-10  
 > **Branch:** `claude/codebase-review-summary-hgNgO`  
-> **Overall progress: ~95%**
+> **Overall progress: ~97%**
 
 Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 
@@ -311,7 +311,8 @@ Listed by severity. Items marked ✅ have been fixed.
 | 6 | Moderate | rest-api | `GET /Notifications` and preferences endpoints return empty stubs | ✅ Fixed |
 | 7 | Moderate | rest-api | `PUT /api/v1/ChargingStations/{id}` ignores request body | ✅ Fixed |
 | 8 | Minor | ocpp-processor | `priceConsumption` / `finalisePrice` gRPC calls missing connector metadata | ✅ Fixed |
-| 9 | Minor | smart-charging | `deleteChargingProfiles` always reports `deleted=1` | deferred |
+| 9 | Minor | smart-charging | `deleteChargingProfiles` always reports `deleted=1` | ✅ Fixed |
+| 10 | High | ocpp-gateway | Cross-pod sticky routing — `SendCommand` returned `NotConnected` for non-local stations | ✅ Fixed |
 
 ---
 
@@ -322,9 +323,9 @@ Listed by severity. Items marked ✅ have been fixed.
 | Phase 1: Foundation | Infrastructure + scaffolding | ~8% | ✅ **100% done** |
 | Phase 2: Low-risk services | Notification, Car, Pricing, Asset | ~18% | ✅ **100% done** (Kong cutover deferred to ops) |
 | Phase 3: Core services | Auth, Roaming, Billing | ~22% | ✅ **100% done** (canary cutover deferred to ops) |
-| Phase 4: Real-time core | Smart Charging, Scheduler, Analytics, REST API, OCPP Gateway, OCPP Processor | ~52% | ✅ **100% done** (gRPC gateway sticky routing + OCPP 1.6/2.x SOAP bridge deferred) |
+| Phase 4: Real-time core | Smart Charging, Scheduler, Analytics, REST API, OCPP Gateway, OCPP Processor | ~52% | ✅ **100% done** (OCPP 1.6/2.x SOAP bridge deferred) |
 | Cross-cutting | Casbin, Helm, Istio, data migrations, test suites | ~10% (distributed) | 🔄 ~30% (ZIO Test suites ✅ — Casbin/Helm/Istio/migrations deferred) |
-| **Total** | | **100%** | **~95% done** |
+| **Total** | | **100%** | **~97% done** |
 
 ---
 
@@ -342,7 +343,7 @@ Listed by severity. Items marked ✅ have been fixed.
 10. ~~**Phase 4e: `ev-ocpp-gateway` + `ev-ocpp-processor`**~~ ✅ Done
 11. **Casbin RBAC policy** — translate `AuthorizationsDefinition.ts` 23 resources × 4 roles to `rbac_policy.csv`
 12. **Helm charts** — per-service Kubernetes deployment (start with `ev-ocpp-gateway` for sticky WS routing)
-13. **OCPP Gateway gRPC server** — `SendCommand` / `SendResponse` / `ListConnectedStations` for cross-pod routing
+13. ~~**OCPP Gateway gRPC server + cross-pod relay**~~ ✅ Done (`CrossPodCommandRelay` fan-out via Kafka)
 14. **Pricing gRPC integration in `ev-ocpp-processor`** — call `PricingService.ResolvePricing` per MeterValues interval
 15. **Shadow testing** — replay captured OCPP message sequences through Scala processor vs TypeScript monolith
 16. **Kong canary** — 5% → 25% → 50% → 100% cutover per service

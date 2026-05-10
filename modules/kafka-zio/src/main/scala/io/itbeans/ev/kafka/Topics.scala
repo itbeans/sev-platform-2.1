@@ -52,3 +52,6 @@ object Topics:
 
   /** Dead letter queue — messages that failed processing after retries. */
   val deadLetterQueue: String = "dlq.failed-messages"
+
+  /** Cross-pod OCPP command relay responses, keyed by correlationId. */
+  val ocppCommandResponses: String = "ocpp.command_responses"

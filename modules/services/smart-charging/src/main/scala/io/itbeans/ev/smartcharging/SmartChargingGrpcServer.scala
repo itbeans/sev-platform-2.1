@@ -79,7 +79,7 @@ final class LiveSmartChargingGrpcHandler(
 
   def deleteChargingProfiles(req: DeleteChargingProfilesRequestADT): Task[DeleteChargingProfilesResponseADT] =
     repo.deleteProfilesForStation(req.tenantId, req.chargingStationId)
-      .as(DeleteChargingProfilesResponseADT(deleted = 1)) // MongoDB doesn't return count on deleteMany in this wrapper
+      .map(count => DeleteChargingProfilesResponseADT(deleted = count))
 
 object LiveSmartChargingGrpcHandler:
 

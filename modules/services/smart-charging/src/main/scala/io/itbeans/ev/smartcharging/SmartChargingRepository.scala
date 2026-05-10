@@ -24,7 +24,7 @@ import java.time.Instant
 trait SmartChargingRepository:
   def saveProfile(profile: ChargingProfile): Task[Unit]
   def findProfiles(tenantId: String, siteAreaId: String): Task[List[ChargingProfile]]
-  def deleteProfilesForStation(tenantId: String, chargingStationId: String): Task[Unit]
+  def deleteProfilesForStation(tenantId: String, chargingStationId: String): Task[Int]
   def findSiteArea(tenantId: String, siteAreaId: String): Task[Option[SiteAreaSC]]
   def findActiveTransactions(tenantId: String, siteAreaId: String): Task[List[ActiveTransactionSC]]
 
@@ -67,12 +67,12 @@ final class MongoSmartChargingRepository(db: MongoDatabase) extends SmartChargin
       }.toList
     }
 
-  def deleteProfilesForStation(tenantId: String, chargingStationId: String): Task[Unit] =
+  def deleteProfilesForStation(tenantId: String, chargingStationId: String): Task[Int] =
     ZIO.fromFuture { _ =>
       profilesCol(tenantId)
         .deleteMany(equal("chargingStationId", chargingStationId))
         .toFuture()
-    }.unit
+    }.map(_.getDeletedCount.toInt)
 
   // ── Site area ─────────────────────────────────────────────────────────
 

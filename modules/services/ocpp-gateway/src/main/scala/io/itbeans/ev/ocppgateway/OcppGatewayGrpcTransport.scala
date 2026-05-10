@@ -21,6 +21,7 @@ import scala.concurrent.{ExecutionContext, Future}
 final class OcppGatewayGrpcTransport(
     registry: ConnectionRegistry,
     frameHandler: OcppFrameHandler,
+    relay: CrossPodCommandRelay,
     cfg: GatewayConfig,
     rt: Runtime[Any]
 ) extends OcppGatewayServiceGrpc.OcppGatewayService:
@@ -56,11 +57,8 @@ final class OcppGatewayGrpcTransport(
 
     registry.get(key).flatMap {
       case None =>
-        ZIO.succeed(SendCommandResponse(
-          delivered = false,
-          errorCode = "NotConnected",
-          errorMessage = "Station not connected on this pod"
-        ))
+        // Station is not on this pod — fan-out via Kafka relay to the pod that owns it
+        relay.relay(req)
 
       case Some(entry) =>
         val payload = parse(req.payloadJson).getOrElse(io.circe.Json.obj())
@@ -169,13 +167,14 @@ final class OcppGatewayGrpcTransport(
 
 object OcppGatewayGrpcTransport:
 
-  val start: RIO[ConnectionRegistry & OcppFrameHandler & GatewayConfig, Unit] =
+  val start: RIO[ConnectionRegistry & OcppFrameHandler & CrossPodCommandRelay & GatewayConfig, Unit] =
     for
       registry     <- ZIO.service[ConnectionRegistry]
       frameHandler <- ZIO.service[OcppFrameHandler]
+      relay        <- ZIO.service[CrossPodCommandRelay]
       cfg          <- ZIO.service[GatewayConfig]
       rt           <- ZIO.runtime[Any]
-      impl = new OcppGatewayGrpcTransport(registry, frameHandler, cfg, rt)
+      impl = new OcppGatewayGrpcTransport(registry, frameHandler, relay, cfg, rt)
       server <- ZIO.attempt(
         NettyServerBuilder
           .forPort(cfg.grpcPort)
