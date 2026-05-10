@@ -1,0 +1,25 @@
+apiVersion: v2
+name: ev-istio
+description: |
+  Istio service mesh resources for the ev-server platform.
+
+  Renders:
+    - PeerAuthentication  — namespace-wide STRICT mTLS (port 8888 permissive
+                            so Prometheus can scrape without a sidecar)
+    - DestinationRule     — per-service mTLS + circuit-breaker outlier detection;
+                            defines stable / canary subsets for canary deployments
+    - VirtualService      — per-service traffic splitting between stable and canary
+                            subsets; canaryWeight=0 routes 100 % to stable
+    - AuthorizationPolicy — denies inter-service calls that are not in the
+                            documented call graph; disabled by default until all
+                            services are injected
+
+  Prerequisites:
+    - Istio operator installed (networking.istio.io/v1 CRDs present)
+    - Namespace labelled: istio-injection=enabled
+    - Each service deployed with a dedicated ServiceAccount (ev-common provides
+      this via the ev-common.serviceaccount template)
+
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

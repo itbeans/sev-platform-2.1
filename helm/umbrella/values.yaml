@@ -60,6 +60,20 @@ ev-scheduler:
 ev-analytics:
   enabled: false
 
+# Service mesh — enable once the Istio operator is installed and all service
+# pods have been restarted with sidecar injection enabled on the namespace.
+ev-istio:
+  enabled: false
+  # Override namespace if services are not deployed to "ev-server"
+  # namespace: ev-server
+  # Switch mTLS to PERMISSIVE during phased sidecar rollout, then flip to STRICT
+  # once all pods are injected:
+  # mtls:
+  #   mode: PERMISSIVE
+  # Disable authorization policies until all services have sidecars:
+  # authorizationPolicies:
+  #   enabled: false
+
 # ── Service-level value overrides ─────────────────────────────────────────────
 # To override any per-service value, nest it under the chart name key, e.g.:
 #

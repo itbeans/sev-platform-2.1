@@ -1,0 +1,25 @@
+{{/*
+Namespace-wide PeerAuthentication — enforces mTLS between all injected pods.
+
+Port 8888 (Prometheus /metrics) is set to PERMISSIVE so that a Prometheus
+instance outside the mesh (or not yet injected) can still scrape metrics.
+Flip port 8888 to STRICT once Prometheus is mesh-injected.
+*/}}
+{{- if .Values.enabled }}
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/part-of: ev-server
+spec:
+  mtls:
+    mode: {{ .Values.mtls.mode }}
+  portLevelMtls:
+    # Allow plaintext on the Prometheus scrape port so an un-injected Prometheus
+    # can collect metrics without being blocked by STRICT mTLS.
+    8888:
+      mode: PERMISSIVE
+{{- end }}

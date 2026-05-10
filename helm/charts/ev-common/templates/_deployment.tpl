@@ -41,7 +41,9 @@ spec:
         prometheus.io/path:   "/metrics"
       labels:
         {{- include "ev-common.selectorLabels" . | nindent 8 }}
+        version: {{ .Values.podVersion | default "stable" }}
     spec:
+      serviceAccountName: {{ include "ev-common.fullname" . }}
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds | default 60 }}
       securityContext:
         runAsNonRoot: true

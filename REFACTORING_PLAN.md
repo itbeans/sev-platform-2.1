@@ -284,7 +284,7 @@ Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 | Prometheus metrics in all services | ✅ | `zio-metrics-connectors-prometheus`; dedicated `/metrics` server on port 8888 in all 13 services; `auth.signin.success/failure` counters in auth-service; `ocpp.events.total{action}` counter in ocpp-processor |
 | Kubernetes Helm charts (per service + umbrella) | ✅ | `ev-common` library chart (deployment, service, hpa, pdb helpers); 13 service charts refactored to 1-line includes; PodDisruptionBudget for all; CPU+memory HPA for 12; KEDA ScaledObject for gateway |
 | Kubernetes HPA config (OCPP Gateway: scale on WS connections) | ✅ | KEDA ScaledObject on `gateway_connected_stations` gauge + secondary CPU trigger; standard HPA as fallback when KEDA disabled |
-| Istio service mesh (mTLS, canary VirtualServices, circuit breaking) | ⬜ | Phase 2+ |
+| Istio service mesh (mTLS, canary VirtualServices, circuit breaking) | ✅ | `ev-istio` chart: PeerAuthentication (STRICT + port-8888 PERMISSIVE for Prometheus), DestinationRule per service (ISTIO_MUTUAL + outlier detection), VirtualService per service (canary weight 0→100 via `canaryWeight` value), AuthorizationPolicy per service (call-graph allow-lists); dedicated ServiceAccount per service for SPIFFE identity |
 | ArgoCD GitOps setup | ⬜ | |
 | Data migration scripts: MongoDB billing → PostgreSQL | ⬜ | Phase 3 |
 | Data migration scripts: MongoDB consumptions → TimescaleDB | ⬜ | Phase 4 |
@@ -324,7 +324,7 @@ Listed by severity. Items marked ✅ have been fixed.
 | Phase 2: Low-risk services | Notification, Car, Pricing, Asset | ~18% | ✅ **100% done** (Kong cutover deferred to ops) |
 | Phase 3: Core services | Auth, Roaming, Billing | ~22% | ✅ **100% done** (canary cutover deferred to ops) |
 | Phase 4: Real-time core | Smart Charging, Scheduler, Analytics, REST API, OCPP Gateway, OCPP Processor | ~52% | ✅ **100% done** (OCPP 1.6/2.x SOAP bridge deferred) |
-| Cross-cutting | Casbin, Helm, Istio, data migrations, test suites | ~10% (distributed) | 🔄 ~90% (Casbin/ABAC ✅, ZIO Test suites ✅, OTel ✅, Prometheus ✅, RBAC matrix ✅, billing parity ✅, Helm charts ✅ — Istio/migrations deferred) |
+| Cross-cutting | Casbin, Helm, Istio, data migrations, test suites | ~10% (distributed) | 🔄 ~95% (Casbin/ABAC ✅, ZIO Test suites ✅, OTel ✅, Prometheus ✅, RBAC matrix ✅, billing parity ✅, Helm charts ✅, Istio mesh ✅ — data migrations deferred) |
 | **Total** | | **100%** | **~99% done** |
 
 ---
