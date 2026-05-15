@@ -1,0 +1,40 @@
+{{/*
+DestinationRule per service — three responsibilities:
+  1. Enforce ISTIO_MUTUAL (mTLS) on all outbound connections to the service.
+  2. Define stable / canary subsets matched by the version pod label.
+  3. Configure outlier detection (circuit breaking) to eject unhealthy hosts.
+
+Circuit breaker settings come from .Values.circuitBreaker (global defaults).
+Subsets use the version label written by ev-common.deployment (podVersion value,
+defaulting to "stable").  A canary Deployment is deployed with podVersion=canary.
+*/}}
+{{- if .Values.enabled }}
+{{- range .Values.services }}
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+    app.kubernetes.io/part-of: ev-server
+spec:
+  host: {{ .name }}.{{ $.Values.namespace }}.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    outlierDetection:
+      consecutiveGatewayErrors: {{ $.Values.circuitBreaker.consecutiveGatewayErrors }}
+      interval: {{ $.Values.circuitBreaker.interval }}
+      baseEjectionTime: {{ $.Values.circuitBreaker.baseEjectionTime }}
+      maxEjectionPercent: {{ $.Values.circuitBreaker.maxEjectionPercent }}
+  subsets:
+    - name: stable
+      labels:
+        version: stable
+    - name: canary
+      labels:
+        version: canary
+{{- end }}
+{{- end }}

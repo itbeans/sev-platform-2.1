@@ -32,6 +32,7 @@ autoscaling:
   minReplicas: 2
   maxReplicas: 8
   targetCPUUtilizationPercentage: 65
+  targetMemoryUtilizationPercentage: 80
 
 env:
   # Cross-service gRPC — env var names match application.conf ${?ENV_VAR} bindings
@@ -44,3 +45,7 @@ env:
 
 envFromSecrets:
   - ev-ocpp-processor-secrets   # MONGODB_URI, KAFKA_BOOTSTRAP_SERVERS
+
+# Seconds the kubelet waits after SIGTERM before sending SIGKILL.
+# Must be > the preStop sleep (5 s) + max request duration.
+terminationGracePeriodSeconds: 60

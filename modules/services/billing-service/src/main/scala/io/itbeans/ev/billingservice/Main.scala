@@ -1,10 +1,13 @@
 package io.itbeans.ev.billingservice
 
 import io.itbeans.ev.kafka.KafkaConfig
+import io.itbeans.ev.otel.{EvTracing, OtelConfig, OtelLayer}
 import zio._
 import zio.config.typesafe.TypesafeConfigProvider
-import zio.http.Server
+import zio.http._
 import zio.logging.backend.SLF4J
+import zio.metrics.connectors.{prometheus, MetricsConfig}
+import zio.metrics.connectors.prometheus.PrometheusPublisher
 
 // ---------------------------------------------------------------------------
 // ev-billing-service — Stripe invoicing + periodic billing + CDR fund dispatch.
@@ -25,12 +28,24 @@ object Main extends ZIOAppDefault:
   override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] =
     Runtime.removeDefaultLoggers >>> SLF4J.slf4j
 
+  private val metricsServer: ZIO[PrometheusPublisher, Throwable, Any] =
+    ZIO.serviceWithZIO[PrometheusPublisher] { publisher =>
+      Server
+        .serve(Routes(Method.GET / "metrics" ->
+          Handler.fromZIO(publisher.get.map(Response.text))))
+        .provide(Server.defaultWithPort(8888))
+        .forkDaemon
+    }
+
   override def run: ZIO[ZIOAppArgs & Scope, Any, Any] =
-    program.provide(
+    (metricsServer *> program).provide(
       Runtime.setConfigProvider(TypesafeConfigProvider.fromResourcePath()),
       // ── Config layers ──────────────────────────────────────────────────
       ZLayer.fromZIO(ZIO.config[KafkaConfig]),
       ZLayer.fromZIO(ZIO.config[BillingConfig]),
+      ZLayer.fromZIO(ZIO.config[OtelConfig]),
+      OtelLayer.live,
+      EvTracing.live,
       // ── Stripe client ──────────────────────────────────────────────────
       StripeClient.live,
       // ── Repository layers (PostgreSQL/Doobie) ──────────────────────────
@@ -45,13 +60,16 @@ object Main extends ZIOAppDefault:
       // ── Kafka consumer ─────────────────────────────────────────────────
       LiveBillingKafkaConsumer.live,
       // ── HTTP server ────────────────────────────────────────────────────
-      Server.defaultWithPort(8080)
+      Server.defaultWithPort(8080),
+      ZLayer.succeed(MetricsConfig(5.seconds)),
+      prometheus.publisherLayer,
+      prometheus.prometheusLayer
     )
 
   private val program: ZIO[
     BillingService & BillingKafkaConsumer & BillingPeriodicTask &
       StripeClient & InvoiceRepository & BillingAccountRepository &
-      BillingUserRepository & BillingGrpcHandler & BillingConfig & Server,
+      BillingUserRepository & BillingGrpcHandler & BillingConfig & Server & EvTracing,
     Throwable,
     Unit
   ] =
@@ -69,6 +87,11 @@ object Main extends ZIOAppDefault:
           s"immediatePayment=${cfg.immediatePayment} " +
           s"monthlyBillingDay=${cfg.monthlyBillingDay}"
       )
+      // Start gRPC server in background
+      _ <- BillingGrpcTransport.start
+        .tapError(err => ZIO.logError(s"Billing gRPC server error: ${err.getMessage}"))
+        .ignore
+        .forkDaemon
       // Start Kafka consumer in background
       _ <- consumer.start
         .tapError(err => ZIO.logError(s"Billing Kafka consumer error: ${err.getMessage}"))

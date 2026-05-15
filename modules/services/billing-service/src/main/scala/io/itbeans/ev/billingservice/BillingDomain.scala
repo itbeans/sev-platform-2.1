@@ -189,10 +189,15 @@ case class TransactionLifecycleBillingPayload(
     startDate: Option[Instant],
     endDate: Option[Instant],
     totalDurationSecs: Option[Long],
+    totalInactivitySecs: Option[Long],
     consumptionWh: Option[Double],
     priceUnit: Option[String],
     totalCost: Option[Double],
-    pricingId: Option[String]
+    pricingId: Option[String],
+    // JSON-encoded dimension breakdown from ev-pricing-service FinalisePrice RPC.
+    // When present, billing dimensions are derived from this; otherwise a single
+    // ENERGY dimension covering the full totalCost is created.
+    invoiceItemJson: Option[String]
 )
 
 object TransactionLifecycleBillingPayload:

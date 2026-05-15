@@ -1,0 +1,181 @@
+# Kubernetes namespace where ev-server services run.
+# Must match the namespace used when deploying the service charts.
+namespace: ev-server
+
+# Toggle the entire ev-istio resource set.  Set to false during initial cluster
+# bootstrapping before the Istio control plane is available.
+enabled: true
+
+# ── mTLS ──────────────────────────────────────────────────────────────────────
+mtls:
+  # STRICT: all inter-pod traffic must use mTLS.
+  # PERMISSIVE: allow plaintext alongside mTLS — use during phased sidecar rollout.
+  mode: STRICT
+
+# ── Circuit breaker defaults ──────────────────────────────────────────────────
+# Applied to every DestinationRule.  Individual services can override via
+# services[*].circuitBreaker (not yet implemented; add override map if needed).
+circuitBreaker:
+  # Eject a host after this many consecutive 5xx / gateway errors in one interval.
+  consecutiveGatewayErrors: 5
+  # Evaluation window for error counting.
+  interval: 30s
+  # Minimum time a host stays ejected after its first ejection.
+  baseEjectionTime: 30s
+  # Never eject more than this percentage of hosts at once (prevents total blackout).
+  maxEjectionPercent: 50
+
+# ── Authorization policies ────────────────────────────────────────────────────
+# Restrict inter-service communication to the documented call graph.
+# Disable during initial rollout (before all pods have sidecars) to avoid
+# blocking legitimate traffic.
+authorizationPolicies:
+  enabled: true
+
+  # allowFrom lists the service-account names (= Helm chart names) allowed to
+  # call each service.  The full SPIFFE principal is constructed in the template:
+  #   cluster.local/ns/<namespace>/sa/<caller>
+  #
+  # Call graph evidence sources: values.yaml env vars + architecture docs.
+  # Extend this list whenever a new inter-service dependency is added.
+  policies:
+    - service: ev-auth-service
+      # Called for JWT validation by gateway, processor, and REST API.
+      allowFrom:
+        - ev-rest-api
+        - ev-ocpp-gateway
+        - ev-ocpp-processor
+        - ev-roaming
+
+    - service: ev-billing-service
+      # Called for invoice queries (REST API) and session finalisation (processor).
+      # Roaming adds charges for OCPI CDR submission.
+      allowFrom:
+        - ev-rest-api
+        - ev-ocpp-processor
+        - ev-roaming
+
+    - service: ev-pricing-service
+      # Consulted by processor (price resolution) and billing (price re-check).
+      allowFrom:
+        - ev-ocpp-processor
+        - ev-billing-service
+
+    - service: ev-smart-charging
+      # Profile management from REST API; optimisation triggers from processor.
+      allowFrom:
+        - ev-rest-api
+        - ev-ocpp-processor
+
+    - service: ev-ocpp-gateway
+      # REST API sends RemoteStart/Stop commands; processor sends OCPP responses.
+      allowFrom:
+        - ev-rest-api
+        - ev-ocpp-processor
+
+    - service: ev-analytics
+      # REST API proxies dashboard queries; scheduler triggers aggregation jobs.
+      allowFrom:
+        - ev-rest-api
+        - ev-scheduler
+
+    - service: ev-notification
+      # Scheduler drives scheduled alerts; billing/processor emit delivery events.
+      allowFrom:
+        - ev-scheduler
+        - ev-billing-service
+        - ev-ocpp-processor
+        - ev-rest-api
+
+    - service: ev-car
+      # Car catalog read/write through REST API only.
+      allowFrom:
+        - ev-rest-api
+
+    - service: ev-asset
+      # Asset management through REST API only.
+      allowFrom:
+        - ev-rest-api
+
+    - service: ev-roaming
+      # OCPI partner callbacks arrive via Kong (external); scheduler drives CDR sync.
+      # Kong principal below assumes Kong runs mesh-injected in its own namespace.
+      allowFrom:
+        - ev-rest-api
+        - ev-scheduler
+        - ev-ocpp-processor
+
+    # ev-rest-api, ev-scheduler, ev-ocpp-processor receive no intra-cluster gRPC
+    # calls from other ev-server services — omit to avoid an overly restrictive
+    # DENY-all policy for those services.  Add policies here if that changes.
+
+# ── Per-service configuration ─────────────────────────────────────────────────
+# canaryWeight: 0–100 — percentage of traffic sent to version=canary pods.
+# Set to 0 initially (all traffic goes to stable).  Increment during a canary
+# release.  A canary Deployment must be created separately with podVersion=canary
+# in its values override file.
+services:
+  - name: ev-auth-service
+    port: 8080
+    grpcPort: 9090
+    canaryWeight: 0
+
+  - name: ev-billing-service
+    port: 8080
+    grpcPort: 9090
+    canaryWeight: 0
+
+  - name: ev-pricing-service
+    port: 8080
+    grpcPort: 9090
+    canaryWeight: 0
+
+  - name: ev-smart-charging
+    port: 8080
+    grpcPort: 9090
+    canaryWeight: 0
+
+  - name: ev-ocpp-gateway
+    port: 8010
+    grpcPort: 9090
+    canaryWeight: 0
+
+  - name: ev-ocpp-processor
+    port: 8080
+    grpcPort: 0
+    canaryWeight: 0
+
+  - name: ev-rest-api
+    port: 8080
+    grpcPort: 0
+    canaryWeight: 0
+
+  - name: ev-analytics
+    port: 8080
+    grpcPort: 0
+    canaryWeight: 0
+
+  - name: ev-car
+    port: 8080
+    grpcPort: 0
+    canaryWeight: 0
+
+  - name: ev-asset
+    port: 8080
+    grpcPort: 0
+    canaryWeight: 0
+
+  - name: ev-notification
+    port: 8080
+    grpcPort: 0
+    canaryWeight: 0
+
+  - name: ev-roaming
+    port: 8080
+    grpcPort: 0
+    canaryWeight: 0
+
+  - name: ev-scheduler
+    port: 8080
+    grpcPort: 0
+    canaryWeight: 0

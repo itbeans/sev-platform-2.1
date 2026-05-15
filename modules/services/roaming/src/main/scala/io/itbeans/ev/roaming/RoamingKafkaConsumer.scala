@@ -21,6 +21,7 @@ import zio.kafka.serde.Serde
 
 final class RoamingKafkaConsumer(
     txRepo: TransactionReadRepository,
+    stationRepo: ChargingStationLocationRepository,
     ocpiRepo: OcpiEndpointRepository,
     oicpRepo: OicpEndpointRepository,
     cdrSvc: CdrService,
@@ -78,13 +79,15 @@ final class RoamingKafkaConsumer(
       tx <- txOpt match
         case None    => ZIO.fail(new Exception(s"Transaction ${payload.transactionId} not found"))
         case Some(t) => ZIO.succeed(t)
+      // Enrich CDR with real station address, coordinates, and connector type
+      stationLoc    <- stationRepo.findLocation(tenantId, tx.chargingStationId).ignore.map(_.toOption.flatten)
       ocpiPartners <- ocpiRepo.findRegistered(tenantId)
         .map(_.filter(_.role == OcpiRole.EMSP))
       oicpPartners <- oicpRepo.findRegistered(tenantId)
       // Push OCPI CDRs to all EMSP partners
       _ <- ZIO.foreachDiscard(ocpiPartners) { partner =>
         val currency = tx.currency.getOrElse("EUR")
-        val cdr      = cdrSvc.buildOcpiCdr(tx, currency)
+        val cdr      = cdrSvc.buildOcpiCdr(tx, currency, stationLoc)
         ocpiClient.pushCdr(partner, cdr)
           .tapError(err =>
             ZIO.logWarning(
@@ -113,9 +116,10 @@ final class RoamingKafkaConsumer(
 object RoamingKafkaConsumer:
 
   val live: ZLayer[
-    TransactionReadRepository & OcpiEndpointRepository & OicpEndpointRepository &
+    TransactionReadRepository & ChargingStationLocationRepository &
+      OcpiEndpointRepository & OicpEndpointRepository &
       CdrService & OcpiCpoClient & OicpCpoClient & KafkaConfig,
     Nothing,
     RoamingKafkaConsumer
   ] =
-    ZLayer.fromFunction(new RoamingKafkaConsumer(_, _, _, _, _, _, _))
+    ZLayer.fromFunction(new RoamingKafkaConsumer(_, _, _, _, _, _, _, _))

@@ -1,11 +1,14 @@
 package io.itbeans.ev.ocppprocessor
 
 import io.itbeans.ev.kafka.{KafkaConfig, LiveEvKafkaProducer}
+import io.itbeans.ev.otel.{EvTracing, OtelConfig, OtelLayer}
 import org.mongodb.scala.MongoClient
 import zio._
 import zio.config.typesafe.TypesafeConfigProvider
 import zio.http._
 import zio.logging.backend.SLF4J
+import zio.metrics.connectors.{prometheus, MetricsConfig}
+import zio.metrics.connectors.prometheus.PrometheusPublisher
 
 // ---------------------------------------------------------------------------
 // ev-ocpp-processor — Kafka consumer for OCPP events.
@@ -34,12 +37,24 @@ object Main extends ZIOAppDefault:
       )
     )
 
+  private val metricsServer: ZIO[PrometheusPublisher, Throwable, Any] =
+    ZIO.serviceWithZIO[PrometheusPublisher] { publisher =>
+      Server
+        .serve(Routes(Method.GET / "metrics" ->
+          Handler.fromZIO(publisher.get.map(Response.text))))
+        .provide(Server.defaultWithPort(8888))
+        .forkDaemon
+    }
+
   override def run: ZIO[ZIOAppArgs & Scope, Any, Any] =
-    program.provide(
+    (metricsServer *> program).provide(
       Runtime.setConfigProvider(TypesafeConfigProvider.fromResourcePath()),
       // Config
       ZLayer.fromZIO(ZIO.config[KafkaConfig]),
       ZLayer.fromZIO(ZIO.config[ProcessorConfig]),
+      ZLayer.fromZIO(ZIO.config[OtelConfig]),
+      OtelLayer.live,
+      EvTracing.live,
       // MongoDB
       mongoDatabaseLayer,
       // Repository
@@ -49,8 +64,12 @@ object Main extends ZIOAppDefault:
       // gRPC clients
       ProcessorAuthClient.live,
       ProcessorGatewayClient.live,
+      ProcessorPricingClient.live,
       // Event processor
-      OcppEventProcessor.live
+      OcppEventProcessor.live,
+      ZLayer.succeed(MetricsConfig(5.seconds)),
+      prometheus.publisherLayer,
+      prometheus.prometheusLayer
     )
 
   private val healthRoutes: Routes[Any, Nothing] =

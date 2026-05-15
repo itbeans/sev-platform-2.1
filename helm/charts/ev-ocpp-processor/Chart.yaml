@@ -4,3 +4,8 @@ description: OCPP business logic processor — Kafka consumer for BootNotif, Met
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
+
+dependencies:
+  - name: ev-common
+    version: "0.1.0"
+    repository: "file://../ev-common"

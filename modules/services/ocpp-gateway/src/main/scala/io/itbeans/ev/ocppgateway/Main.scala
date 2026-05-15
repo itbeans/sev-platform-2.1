@@ -2,6 +2,7 @@ package io.itbeans.ev.ocppgateway
 
 import io.itbeans.ev.auth.CasbinAuthorizationService
 import io.itbeans.ev.kafka.{KafkaConfig, LiveEvKafkaProducer}
+import io.itbeans.ev.otel.{EvTracing, OtelConfig, OtelLayer}
 import zio._
 import zio.config.typesafe.TypesafeConfigProvider
 import zio.logging.backend.SLF4J
@@ -32,12 +33,17 @@ object Main extends ZIOAppDefault:
       // Config
       ZLayer.fromZIO(ZIO.config[KafkaConfig]),
       ZLayer.fromZIO(ZIO.config[GatewayConfig]),
+      ZLayer.fromZIO(ZIO.config[OtelConfig]),
+      OtelLayer.live,
+      EvTracing.live,
       // Kafka producer
       LiveEvKafkaProducer.live,
       // Connection registry (ZHub + Ref)
       ConnectionRegistry.live,
       // Frame handler (JSON parse + Kafka publish)
       OcppFrameHandler.live,
+      // Cross-pod command relay (fan-out Kafka consumers, one per pod)
+      CrossPodCommandRelay.live,
       // In-process auth (Casbin RBAC/ABAC)
       CasbinAuthorizationService.live,
       // Prometheus metrics (5-second scrape interval)
@@ -48,13 +54,20 @@ object Main extends ZIOAppDefault:
       OcppGatewayServer.live
     )
 
-  private val program: ZIO[GatewayConfig & OcppGatewayServer & ConnectionRegistry & OcppFrameHandler, Throwable, Unit] =
+  private val program: ZIO[
+    GatewayConfig & OcppGatewayServer & ConnectionRegistry & OcppFrameHandler & CrossPodCommandRelay & EvTracing,
+    Throwable,
+    Unit
+  ] =
     for
       cfg    <- ZIO.service[GatewayConfig]
       server <- ZIO.service[OcppGatewayServer]
+      relay  <- ZIO.service[CrossPodCommandRelay]
       _ <- ZIO.logInfo(
         s"ev-ocpp-gateway starting: ws=:${cfg.httpPort} grpc=:${cfg.grpcPort}"
       )
+      _ <- ZIO.scoped(relay.startCommandConsumer).forkDaemon  // fan-out: relay inbound commands
+      _ <- ZIO.scoped(relay.startResponseConsumer).forkDaemon // fan-out: relay responses
       _ <- OcppGatewayGrpcTransport.start // start Netty gRPC server (non-blocking)
       _ <- server.start                   // start ZIO HTTP WebSocket server (blocks)
     yield ()

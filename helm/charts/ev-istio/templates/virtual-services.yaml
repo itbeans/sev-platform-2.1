@@ -1,0 +1,42 @@
+{{/*
+VirtualService per service — canary traffic splitting.
+
+When canaryWeight = 0 (the default), 100 % of traffic goes to the stable subset
+and no canary destination is rendered.  To run a canary:
+  1. Deploy a second Deployment with podVersion=canary in its values.
+  2. Increase canaryWeight in ev-istio values (e.g. canaryWeight: 20 for 20 %).
+  3. Monitor error rates; roll back by setting canaryWeight back to 0.
+
+Istio's http routes apply to both HTTP/1.1 and HTTP/2 (gRPC), so a single route
+block covers all protocols exposed by a service.  No explicit port is set in the
+destination so Istio's Envoy proxy forwards to the same port the caller targeted.
+*/}}
+{{- if .Values.enabled }}
+{{- range .Values.services }}
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+    app.kubernetes.io/part-of: ev-server
+spec:
+  hosts:
+    - {{ .name }}
+    - {{ .name }}.{{ $.Values.namespace }}.svc.cluster.local
+  http:
+    - route:
+        - destination:
+            host: {{ .name }}.{{ $.Values.namespace }}.svc.cluster.local
+            subset: stable
+          weight: {{ sub 100 (int .canaryWeight) }}
+        {{- if gt (int .canaryWeight) 0 }}
+        - destination:
+            host: {{ .name }}.{{ $.Values.namespace }}.svc.cluster.local
+            subset: canary
+          weight: {{ .canaryWeight }}
+        {{- end }}
+{{- end }}
+{{- end }}

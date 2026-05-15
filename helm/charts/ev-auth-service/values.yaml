@@ -32,6 +32,7 @@ autoscaling:
   minReplicas: 2
   maxReplicas: 8
   targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
 
 # Extra environment variables (non-sensitive; secrets go via envFromSecrets)
 env:
@@ -42,3 +43,7 @@ env:
 # Kubernetes Secret names whose env vars are injected into the container
 envFromSecrets:
   - ev-auth-service-secrets   # JWT_SECRET, MONGO_URI
+
+# Seconds the kubelet waits after SIGTERM before sending SIGKILL.
+# Must be > the preStop sleep (5 s) + max request duration.
+terminationGracePeriodSeconds: 60

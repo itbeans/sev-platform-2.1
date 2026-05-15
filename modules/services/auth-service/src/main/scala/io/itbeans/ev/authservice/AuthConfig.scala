@@ -19,7 +19,9 @@ case class AuthConfig(
     passwordWrongNumberOfTrial: Int,
     passwordBlockedWaitTimeMin: Int,
     // The super-admin tenant ID (used when no subdomain is provided)
-    defaultTenantId: String
+    defaultTenantId: String,
+    // Enable the parallel-run comparison endpoint (set true during 60-day migration)
+    parallelRunEnabled: Boolean = false
 )
 
 object AuthConfig:
@@ -33,8 +35,9 @@ object AuthConfig:
       Config.int("userTechnicalTokenLifetimeDays") zip
       Config.int("passwordWrongNumberOfTrial") zip
       Config.int("passwordBlockedWaitTimeMin") zip
-      Config.string("defaultTenantId")
+      Config.string("defaultTenantId") zip
+      Config.boolean("parallelRunEnabled").withDefault(false)
   ).nested("auth").map {
-    case (httpPort, grpcPort, userTokenKey, utlh, udtld, uttld, pwnt, pbwt, tenantId) =>
-      AuthConfig(httpPort, grpcPort, userTokenKey, utlh, udtld, uttld, pwnt, pbwt, tenantId)
+    case (httpPort, grpcPort, userTokenKey, utlh, udtld, uttld, pwnt, pbwt, tenantId, prEnabled) =>
+      AuthConfig(httpPort, grpcPort, userTokenKey, utlh, udtld, uttld, pwnt, pbwt, tenantId, prEnabled)
   }

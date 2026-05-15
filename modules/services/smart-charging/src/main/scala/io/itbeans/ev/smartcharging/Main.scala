@@ -2,10 +2,14 @@ package io.itbeans.ev.smartcharging
 
 import io.itbeans.ev.kafka.KafkaConfig
 import io.itbeans.ev.mongo.{MongoClientLayer, MongoConfig, MongoDatabaseLayer}
+import io.itbeans.ev.otel.{EvTracing, OtelConfig, OtelLayer}
 import zio._
 import zio.config.magnolia._
 import zio.config.typesafe.TypesafeConfigProvider
+import zio.http._
 import zio.logging.backend.SLF4J
+import zio.metrics.connectors.{prometheus, MetricsConfig}
+import zio.metrics.connectors.prometheus.PrometheusPublisher
 
 // ---------------------------------------------------------------------------
 // ev-smart-charging — SAP Smart Charging integration + OCPP 2.1 DER Control.
@@ -29,30 +33,47 @@ object Main extends ZIOAppDefault:
 
   // Config givens come from MongoConfig, KafkaConfig, and SmartChargingConfig companion objects
 
+  private val metricsServer: ZIO[PrometheusPublisher, Throwable, Any] =
+    ZIO.serviceWithZIO[PrometheusPublisher] { publisher =>
+      Server
+        .serve(Routes(Method.GET / "metrics" ->
+          Handler.fromZIO(publisher.get.map(Response.text))))
+        .provide(Server.defaultWithPort(8888))
+        .forkDaemon
+    }
+
   override def run: ZIO[ZIOAppArgs & Scope, Any, Any] =
-    program.provide(
+    (metricsServer *> program).provide(
       Runtime.setConfigProvider(TypesafeConfigProvider.fromResourcePath()),
       // ── Config layers ──────────────────────────────────────────────────
       ZLayer.fromZIO(ZIO.config[MongoConfig]),
       ZLayer.fromZIO(ZIO.config[KafkaConfig]),
       ZLayer.fromZIO(ZIO.config[SmartChargingConfig]),
+      ZLayer.fromZIO(ZIO.config[OtelConfig]),
+      OtelLayer.live,
+      EvTracing.live,
       // ── MongoDB ────────────────────────────────────────────────────────
       MongoClientLayer.live,
       MongoDatabaseLayer.live,
       MongoSmartChargingRepository.live,
       // ── SAP optimizer HTTP client ──────────────────────────────────────
       SapSmartChargingClient.live,
+      // ── OCPP Gateway gRPC client (for SetChargingProfile delivery) ─────
+      SmartChargingGatewayClient.live,
       // ── Business logic ─────────────────────────────────────────────────
       LiveSmartChargingService.live,
       LiveSmartChargingGrpcHandler.live,
       // ── Kafka consumers ────────────────────────────────────────────────
-      LiveSmartChargingKafkaConsumer.live
+      LiveSmartChargingKafkaConsumer.live,
+      ZLayer.succeed(MetricsConfig(5.seconds)),
+      prometheus.publisherLayer,
+      prometheus.prometheusLayer
     )
 
   private val program: ZIO[
     SmartChargingConfig & KafkaConfig &
       SmartChargingService & SmartChargingKafkaConsumer &
-      SmartChargingGrpcHandler & SmartChargingRepository,
+      SmartChargingGrpcHandler & SmartChargingRepository & EvTracing,
     Throwable,
     Unit
   ] =
@@ -66,6 +87,10 @@ object Main extends ZIOAppDefault:
           s"debounceSecs=${cfg.debounceSecs} " +
           s"periodicIntervalMins=${cfg.periodicIntervalMins}"
       )
+      // Start gRPC server
+      _ <- SmartChargingGrpcTransport.start
+        .tapError(err => ZIO.logError(s"gRPC server failed to start: ${err.getMessage}"))
+        .forkDaemon
       // Start both Kafka consumers in background (triggers + asset consumptions)
       _ <- consumer.start
         .tapError(err => ZIO.logError(s"Smart charging Kafka consumer error: ${err.getMessage}"))

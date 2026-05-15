@@ -16,7 +16,9 @@ case class RoamingConfig(
     // External URL base (how partners reach us)
     externalUrl: String, // e.g. "https://csms.example.com"
     // Default tenant (for credential exchange with unknown tenant context)
-    defaultTenantId: String
+    defaultTenantId: String,
+    // OCPI background patch job interval (hours); 0 = disabled
+    patchJobIntervalHours: Int
 )
 
 object RoamingConfig:
@@ -28,8 +30,9 @@ object RoamingConfig:
       Config.string("ocpiOperatorName") zip
       Config.string("ocpiLocalToken") zip
       Config.string("externalUrl") zip
-      Config.string("defaultTenantId")
+      Config.string("defaultTenantId") zip
+      Config.int("patchJobIntervalHours").withDefault(12)
   ).nested("roaming").map {
-    case (httpPort, countryCode, partyId, opName, localToken, extUrl, tenantId) =>
-      RoamingConfig(httpPort, countryCode, partyId, opName, localToken, extUrl, tenantId)
+    case (httpPort, countryCode, partyId, opName, localToken, extUrl, tenantId, patchInterval) =>
+      RoamingConfig(httpPort, countryCode, partyId, opName, localToken, extUrl, tenantId, patchInterval)
   }

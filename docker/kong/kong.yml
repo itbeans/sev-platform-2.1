@@ -50,3 +50,45 @@ services:
       - name: analytics
         paths: ["/analytics"]
         protocols: [http, https]
+
+  # ── Billing service ──────────────────────────────────────────────────────────
+  # Handles Stripe customer/invoice management and Stripe webhook callbacks.
+  - name: ev-billing-service
+    url: http://billing-service:8080
+    routes:
+      - name: billing
+        paths: ["/api/billing"]
+        protocols: [http, https]
+
+  # ── Pricing service ──────────────────────────────────────────────────────────
+  # Tariff/pricing CRUD and preview endpoints used by the management UI.
+  - name: ev-pricing-service
+    url: http://pricing-service:8080
+    routes:
+      - name: pricing
+        paths: ["/api/pricing"]
+        protocols: [http, https]
+
+  # ── Asset service ────────────────────────────────────────────────────────────
+  # File/image asset storage (station images, documents, etc.).
+  - name: ev-asset
+    url: http://asset:8080
+    routes:
+      - name: assets
+        paths: ["/api/assets"]
+        protocols: [http, https]
+
+  # ── Car service ──────────────────────────────────────────────────────────────
+  # Car catalogue, car maker reference data, and user vehicle management.
+  - name: ev-car
+    url: http://car:8080
+    routes:
+      - name: carcatalogs
+        paths: ["/api/carcatalogs"]
+        protocols: [http, https]
+      - name: cars
+        paths: ["/api/cars"]
+        protocols: [http, https]
+      - name: carmakers
+        paths: ["/api/carmakers"]
+        protocols: [http, https]

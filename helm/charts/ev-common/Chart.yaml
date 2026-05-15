@@ -1,0 +1,16 @@
+apiVersion: v2
+name: ev-common
+description: |
+  Helm library chart — shared templates for all ev-server microservices.
+
+  Provides:
+    ev-common.deployment  — Deployment with security context, metrics port,
+                            preStop hook, /tmp emptyDir, readinessProbe
+    ev-common.service     — ClusterIP with http, optional grpc, and metrics ports
+    ev-common.hpa         — HPA with CPU + memory metrics
+    ev-common.pdb         — PodDisruptionBudget (minAvailable 1 when replicas > 1)
+    ev-common.fullname    — Release-scoped resource name helper (≤63 chars)
+    ev-common.labels      — Standard Kubernetes recommended labels
+    ev-common.selectorLabels — Selector label subset
+type: library
+version: 0.1.0

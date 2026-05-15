@@ -4,3 +4,8 @@ description: Email (MJML) and Firebase push notification delivery — Kafka cons
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
+
+dependencies:
+  - name: ev-common
+    version: "0.1.0"
+    repository: "file://../ev-common"

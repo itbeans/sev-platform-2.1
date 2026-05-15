@@ -1,0 +1,41 @@
+{{/*
+AuthorizationPolicy — ALLOW rules for the documented inter-service call graph.
+
+Each policy whitelists exactly the service accounts that are known to call a
+given service.  Any connection not matching an ALLOW rule is denied (Istio
+default-deny when at least one AuthorizationPolicy exists for a workload).
+
+SPIFFE principal format: cluster.local/ns/<namespace>/sa/<service-account>
+The service-account name equals the Helm chart name (set by ev-common.fullname
+when Release.Name == Chart.Name, which is true for all standard deployments).
+
+Disable authorizationPolicies.enabled during initial sidecar rollout to avoid
+blocking traffic while not all pods are injected yet.
+*/}}
+{{- if and .Values.enabled .Values.authorizationPolicies.enabled }}
+{{- range .Values.authorizationPolicies.policies }}
+{{- if .allowFrom }}
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-{{ .service }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+    app.kubernetes.io/part-of: ev-server
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .service }}
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              {{- range .allowFrom }}
+              - "cluster.local/ns/{{ $.Values.namespace }}/sa/{{ . }}"
+              {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

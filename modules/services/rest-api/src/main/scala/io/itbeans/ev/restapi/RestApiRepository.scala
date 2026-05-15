@@ -112,6 +112,12 @@ trait RestApiRepository:
   def createRegistrationToken(tenantId: String, doc: Document): Task[Unit]
   def deleteRegistrationToken(tenantId: String, id: String): Task[Boolean]
 
+  // Notifications
+  def listNotifications(tenantId: String, limit: Int, skip: Int, userId: Option[String], channel: Option[String]): Task[PagedResult[Document]]
+  def deleteNotification(tenantId: String, id: String): Task[Boolean]
+  def getNotificationPreferences(tenantId: String, userId: String): Task[Option[io.circe.Json]]
+  def upsertNotificationPreferences(tenantId: String, userId: String, body: io.circe.Json): Task[Unit]
+
 // ── MongoDB implementation ───────────────────────────────────────────────
 
 final class MongoRestApiRepository(db: MongoDatabase) extends RestApiRepository:
@@ -395,6 +401,44 @@ final class MongoRestApiRepository(db: MongoDatabase) extends RestApiRepository:
     ZIO.fromFuture { _ =>
       col(tenantId, "registrationtokens").deleteOne(equal("_id", id)).toFuture()
     }.map(_.getDeletedCount > 0)
+
+  // ── Notifications ─────────────────────────────────────────────────────────
+
+  def listNotifications(tenantId: String, limit: Int, skip: Int, userId: Option[String], channel: Option[String]): Task[PagedResult[Document]] =
+    val filters = List(
+      userId.map(id => equal("userId", id)),
+      channel.map(c => equal("channel", c))
+    ).flatten
+    val filter = if filters.isEmpty then new Document() else and(filters*)
+    ZIO.fromFuture { _ =>
+      col(tenantId, "notifications")
+        .find(filter)
+        .sort(descending("timestamp"))
+        .skip(skip)
+        .limit(limit)
+        .toFuture()
+    }.map(docs => PagedResult(docs.toList, docs.size))
+
+  def deleteNotification(tenantId: String, id: String): Task[Boolean] =
+    ZIO.fromFuture { _ =>
+      col(tenantId, "notifications").deleteOne(equal("_id", id)).toFuture()
+    }.map(_.getDeletedCount > 0)
+
+  def getNotificationPreferences(tenantId: String, userId: String): Task[Option[io.circe.Json]] =
+    ZIO.fromFuture { _ =>
+      col(tenantId, "notificationpreferences").find(equal("_id", userId)).headOption()
+    }.map(_.flatMap(d => io.circe.parser.parse(d.toJson).toOption))
+
+  def upsertNotificationPreferences(tenantId: String, userId: String, body: io.circe.Json): Task[Unit] =
+    ZIO.fromFuture { _ =>
+      col(tenantId, "notificationpreferences")
+        .updateOne(
+          equal("_id", userId),
+          new Document("$set", Document.parse(body.noSpaces)),
+          org.mongodb.scala.model.UpdateOptions().upsert(true)
+        )
+        .toFuture()
+    }.unit
 
   // ── BSON → domain mappers (simplified — delegates to Circe JSON round-trip) ──
 

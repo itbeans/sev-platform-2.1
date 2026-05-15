@@ -24,7 +24,11 @@ final class CdrService:
    *   - total_parking_time: inactivity duration (hours)
    *   - charging_periods: one period spanning the full session with ENERGY + TIME dimensions
    */
-  def buildOcpiCdr(tx: RoamingTransaction, currencyCode: String): OcpiCdr =
+  def buildOcpiCdr(
+      tx: RoamingTransaction,
+      currencyCode: String,
+      stationLocation: Option[StationLocation] = None
+  ): OcpiCdr =
     val startTs    = tx.startDate
     val stopTs     = tx.endDate
     val energyKwh  = math.max(0.0, (tx.meterStop - tx.meterStart) / 1000.0)
@@ -45,7 +49,7 @@ final class CdrService:
       tariff_id = None
     )
 
-    val location = buildCdrLocation(tx)
+    val location = buildCdrLocation(tx, stationLocation)
 
     OcpiCdr(
       id = cdrId,
@@ -102,23 +106,30 @@ final class CdrService:
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  private def buildCdrLocation(tx: RoamingTransaction): OcpiCdrLocation =
-    // In a full implementation, look up location details from the charging station/site.
-    // During migration, this is populated from OCPI session metadata if available.
+  private def buildCdrLocation(
+      tx: RoamingTransaction,
+      loc: Option[StationLocation]
+  ): OcpiCdrLocation =
+    val (standard, format, powerType) =
+      OcpiConnectorMapping.toOcpi(loc.flatMap(_.connectorType))
+
     OcpiCdrLocation(
       id = tx.siteId.getOrElse(tx.chargingStationId),
-      name = None,
-      address = "",
-      city = "",
-      postal_code = "",
-      country = "DEU", // default; should come from charging station country
-      coordinates = OcpiGeoLocation("0.0", "0.0"),
+      name = loc.flatMap(_.siteName),
+      address = loc.map(_.address).getOrElse(""),
+      city = loc.map(_.city).getOrElse(""),
+      postal_code = loc.map(_.postalCode).getOrElse(""),
+      country = loc.map(_.country).getOrElse("DEU"),
+      coordinates = OcpiGeoLocation(
+        loc.map(_.latitude).getOrElse("0.0"),
+        loc.map(_.longitude).getOrElse("0.0")
+      ),
       evse_uid = tx.ocpiEvseId.getOrElse(s"${tx.chargingStationId}_${tx.connectorId}"),
       evse_id = tx.ocpiEvseId.getOrElse(s"${tx.chargingStationId}*${tx.connectorId}"),
       connector_id = tx.connectorId.toString,
-      connector_standard = "IEC_62196_T2",
-      connector_format = "SOCKET",
-      connector_power_type = "AC_3_PHASE"
+      connector_standard = standard,
+      connector_format = format,
+      connector_power_type = powerType
     )
 
 object CdrService:

@@ -93,3 +93,11 @@ dependencies:
     version: "0.1.0"
     repository: "file://../charts/ev-analytics"
     condition: ev-analytics.enabled
+
+  # ── Service mesh ──────────────────────────────────────────────────────────
+  # Requires Istio operator installed in the cluster.
+  # Enable after all service pods have Istio sidecars injected.
+  - name: ev-istio
+    version: "0.1.0"
+    repository: "file://../charts/ev-istio"
+    condition: ev-istio.enabled

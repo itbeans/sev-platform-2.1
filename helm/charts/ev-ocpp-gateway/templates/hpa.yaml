@@ -1,22 +1,7 @@
-{{- if .Values.autoscaling.enabled }}
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: {{ include (print .Chart.Name ".fullname") . }}
-  labels:
-    {{- include (print .Chart.Name ".labels") . | nindent 4 }}
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: {{ include (print .Chart.Name ".fullname") . }}
-  minReplicas: {{ .Values.autoscaling.minReplicas }}
-  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
+{{/*
+For ev-ocpp-gateway, prefer KEDA scaling on WebSocket connection count.
+Fall back to CPU/memory HPA when KEDA is not available in the cluster.
+*/}}
+{{- if not .Values.keda.enabled }}
+{{- include "ev-common.hpa" . }}
 {{- end }}

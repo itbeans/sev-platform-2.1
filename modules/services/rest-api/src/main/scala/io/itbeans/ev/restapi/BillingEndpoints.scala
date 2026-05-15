@@ -111,13 +111,38 @@ object BillingEndpoints:
     .in(tenantHeader)
     .out(statusCode(sttp.model.StatusCode.NoContent))
 
+  private def recordToInvoice(rec: io.itbeans.ev.billing.grpc.billing_service.InvoiceRecord): Invoice =
+    Invoice(
+      id            = rec.id,
+      tenantId      = rec.tenantId,
+      userId        = rec.userId,
+      userEmail     = "",
+      number        = rec.invoiceNumber,
+      status        = rec.status,
+      amount        = rec.amountCents / 100.0,
+      currency      = rec.currency,
+      periodFrom    = rec.createdOn,
+      periodTo      = rec.lastChangedOn,
+      downloadUrl   = if rec.downloadUrl.nonEmpty then Some(rec.downloadUrl) else None,
+      createdOn     = rec.createdOn,
+      lastChangedOn = rec.lastChangedOn
+    )
+
   def routes(billing: BillingGrpcClient): List[ZServerEndpoint[Any, Any]] = List(
-    // Invoices — stored in billing service; return empty list until billing svc is deployed
     listInvoicesEp.zServerLogic { case (tenantId, limit, skip, userId, status, from, to) =>
-      ZIO.succeed(InvoicesResponse(Nil, 0))
+      billing
+        .getInvoices(tenantId, userId.getOrElse(""), limit.getOrElse(25), skip.getOrElse(0))
+        .map(r => InvoicesResponse(r.invoices.map(recordToInvoice).toList, r.total))
+        .mapError(_.getMessage)
     },
     getInvoiceEp.zServerLogic { case (id, tenantId) =>
-      ZIO.fail(s"Invoice $id not found")
+      billing
+        .getInvoice(tenantId, id)
+        .flatMap { r =>
+          if r.found && r.invoice.nonEmpty then ZIO.succeed(recordToInvoice(r.invoice.get))
+          else ZIO.fail(s"Invoice $id not found")
+        }
+        .mapError(_.toString)
     },
     downloadInvoiceEp.zServerLogic { case (id, tenantId) =>
       billing.downloadInvoice(tenantId, id).flatMap { r =>

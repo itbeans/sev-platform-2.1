@@ -39,6 +39,9 @@ trait OicpEndpointRepository:
 trait TransactionReadRepository:
   def findById(tenantId: TenantId, transactionId: Long): Task[Option[RoamingTransaction]]
 
+trait ChargingStationLocationRepository:
+  def findLocation(tenantId: TenantId, stationId: String): Task[Option[StationLocation]]
+
 // ── MongoOcpiEndpointRepository ───────────────────────────────────────────
 
 final class MongoOcpiEndpointRepository(db: MongoDatabase) extends OcpiEndpointRepository:
@@ -239,3 +242,39 @@ object MongoTransactionReadRepository:
 
   val live: ZLayer[MongoDatabase, Nothing, TransactionReadRepository] =
     ZLayer.fromFunction(new MongoTransactionReadRepository(_))
+
+// ── MongoChargingStationLocationRepository ────────────────────────────────
+
+final class MongoChargingStationLocationRepository(db: MongoDatabase)
+    extends ChargingStationLocationRepository:
+
+  override def findLocation(tid: TenantId, stationId: String): Task[Option[StationLocation]] =
+    ZIO.fromFuture(_ =>
+      db.getCollection[Document](s"${tid.value}.chargingstations")
+        .find(equal("_id", stationId))
+        .first()
+        .toFuture()
+    ).map(d => Option(d).map(docToLocation))
+
+  private def docToLocation(d: Document): StationLocation =
+    val addrDoc  = Option(d.get("address", classOf[Document]))
+    val coordDoc = Option(d.get("coordinates", classOf[Document]))
+
+    StationLocation(
+      stationId = Option(d.getString("_id")).getOrElse(""),
+      connectorType = Option(d.getList("connectors", classOf[Document]))
+        .flatMap(cs => Option(cs.get(0)))
+        .flatMap(c => Option(c.getString("type"))),
+      address = addrDoc.flatMap(a => Option(a.getString("address1"))).getOrElse(""),
+      city = addrDoc.flatMap(a => Option(a.getString("city"))).getOrElse(""),
+      postalCode = addrDoc.flatMap(a => Option(a.getString("postalCode"))).getOrElse(""),
+      country = addrDoc.flatMap(a => Option(a.getString("country"))).getOrElse("DEU"),
+      latitude = coordDoc.flatMap(c => Option(c.getDouble("lat")).map(_.toString)).getOrElse("0.0"),
+      longitude = coordDoc.flatMap(c => Option(c.getDouble("lng")).map(_.toString)).getOrElse("0.0"),
+      siteName = Option(d.getString("siteID"))
+    )
+
+object MongoChargingStationLocationRepository:
+
+  val live: ZLayer[MongoDatabase, Nothing, ChargingStationLocationRepository] =
+    ZLayer.fromFunction(new MongoChargingStationLocationRepository(_))

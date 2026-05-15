@@ -225,28 +225,94 @@ final class LiveBillingService(
 
   /**
    * Build billing dimensions from the transaction payload.
-   * Mirrors TypeScript BillingFacade dimension calculation.
+   *
+   * Priority order:
+   *  1. `invoiceItemJson` — JSON array of BillingDimension from ev-pricing-service
+   *     FinalisePrice RPC; used directly when present and non-empty.
+   *  2. Proportional fallback — splits totalCost into ENERGY + CHARGING_TIME +
+   *     PARKING_TIME based on session metrics when pricing breakdown is unavailable.
+   *
+   * Mirrors TypeScript BillingFacade / BillingIntegration dimension logic.
    */
   private def buildDimensions(payload: TransactionLifecycleBillingPayload): List[BillingDimension] =
     val totalCost = payload.totalCost.getOrElse(0.0)
     if totalCost <= 0.0 then Nil
     else
-      // Split proportionally by dimension if pricing breakdown available.
-      // In the current model the total is known but individual rates are not exposed
-      // in the Kafka payload — create a single ENERGY dimension for the full amount.
-      val amountCents = math.round(totalCost * 100).toInt
-      val energyKwh   = payload.consumptionWh.map(_ / 1000.0).getOrElse(0.0)
-      List(
-        BillingDimension(
-          `type` = "ENERGY",
-          unitPrice = if energyKwh > 0 then
-            BigDecimal(totalCost / energyKwh).setScale(4, BigDecimal.RoundingMode.HALF_UP)
-          else BigDecimal(0),
-          quantity = BigDecimal(energyKwh).setScale(3, BigDecimal.RoundingMode.HALF_UP),
-          amountCents = amountCents,
-          description = s"Charging energy ${f"$energyKwh%.3f"} kWh"
-        )
-      )
+      // 1. Use pricing-service breakdown if available
+      payload.invoiceItemJson
+        .flatMap { json =>
+          io.circe.parser.decode[List[BillingDimension]](json).toOption
+        }
+        .filter(_.nonEmpty) match
+        case Some(dims) => dims
+
+        // 2. Proportional fallback based on session metrics
+        case None =>
+          val totalCents      = math.round(totalCost * 100).toInt
+          val energyKwh       = payload.consumptionWh.map(_ / 1000.0).getOrElse(0.0)
+          val durationSecs    = payload.totalDurationSecs.getOrElse(0L)
+          val inactivitySecs  = payload.totalInactivitySecs.getOrElse(0L)
+          val chargingSecs    = math.max(0L, durationSecs - inactivitySecs)
+
+          // Weight: energy (80% if both present), time (15%), parking (5%)
+          // Adjusted so that zero-quantity dimensions are omitted.
+          val hasEnergy  = energyKwh > 0
+          val hasTime    = chargingSecs > 0
+          val hasParking = inactivitySecs > 0
+
+          val weights = List(
+            if hasEnergy  then Some(("energy",   0.80)) else None,
+            if hasTime    then Some(("time",      0.15)) else None,
+            if hasParking then Some(("parking",   0.05)) else None
+          ).flatten
+
+          val totalWeight = weights.map(_._2).sum
+          val normalized  = weights.map { case (k, w) => k -> (w / totalWeight) }
+
+          val allocated = normalized.map { case (key, fraction) =>
+            val cents = math.round(totalCents * fraction).toInt
+            key match
+              case "energy" =>
+                BillingDimension(
+                  `type` = "ENERGY",
+                  unitPrice = if energyKwh > 0 then
+                    BigDecimal(cents.toDouble / 100 / energyKwh).setScale(4, BigDecimal.RoundingMode.HALF_UP)
+                  else BigDecimal(0),
+                  quantity = BigDecimal(energyKwh).setScale(3, BigDecimal.RoundingMode.HALF_UP),
+                  amountCents = cents,
+                  description = f"Charging energy $energyKwh%.3f kWh"
+                )
+              case "time" =>
+                val chargingMins = chargingSecs / 60.0
+                BillingDimension(
+                  `type` = "CHARGING_TIME",
+                  unitPrice = if chargingMins > 0 then
+                    BigDecimal(cents.toDouble / 100 / chargingMins).setScale(4, BigDecimal.RoundingMode.HALF_UP)
+                  else BigDecimal(0),
+                  quantity = BigDecimal(chargingMins).setScale(2, BigDecimal.RoundingMode.HALF_UP),
+                  amountCents = cents,
+                  description = f"Charging time $chargingMins%.0f min"
+                )
+              case "parking" =>
+                val parkingMins = inactivitySecs / 60.0
+                BillingDimension(
+                  `type` = "PARKING_TIME",
+                  unitPrice = if parkingMins > 0 then
+                    BigDecimal(cents.toDouble / 100 / parkingMins).setScale(4, BigDecimal.RoundingMode.HALF_UP)
+                  else BigDecimal(0),
+                  quantity = BigDecimal(parkingMins).setScale(2, BigDecimal.RoundingMode.HALF_UP),
+                  amountCents = cents,
+                  description = f"Parking time $parkingMins%.0f min"
+                )
+              case _ => BillingDimension("OTHER", BigDecimal(0), BigDecimal(0), cents, "Other charges")
+          }
+
+          // Adjust last dimension to absorb rounding errors
+          if allocated.isEmpty then Nil
+          else
+            val sumSoFar = allocated.dropRight(1).map(_.amountCents).sum
+            val last     = allocated.last
+            allocated.dropRight(1) :+ last.copy(amountCents = totalCents - sumSoFar)
 
 object LiveBillingService:
 

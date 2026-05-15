@@ -32,6 +32,7 @@ autoscaling:
   minReplicas: 2
   maxReplicas: 6
   targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
 
 env:
   LOG_LEVEL: "INFO"
@@ -40,3 +41,7 @@ env:
 
 envFromSecrets:
   - ev-analytics-secrets   # POSTGRES_URI (TimescaleDB), KAFKA_BOOTSTRAP
+
+# Seconds the kubelet waits after SIGTERM before sending SIGKILL.
+# Must be > the preStop sleep (5 s) + max request duration.
+terminationGracePeriodSeconds: 60

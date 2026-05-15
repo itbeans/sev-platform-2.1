@@ -2,10 +2,14 @@ package io.itbeans.ev.scheduler
 
 import io.itbeans.ev.kafka.KafkaConfig
 import io.itbeans.ev.mongo.{MongoClientLayer, MongoConfig, MongoDatabaseLayer}
+import io.itbeans.ev.otel.{EvTracing, OtelConfig, OtelLayer}
 import zio._
 import zio.config.magnolia._
 import zio.config.typesafe.TypesafeConfigProvider
+import zio.http._
 import zio.logging.backend.SLF4J
+import zio.metrics.connectors.{prometheus, MetricsConfig}
+import zio.metrics.connectors.prometheus.PrometheusPublisher
 
 // ---------------------------------------------------------------------------
 // ev-scheduler — Cron-style periodic task runner.
@@ -30,19 +34,34 @@ object Main extends ZIOAppDefault:
 
   // Config givens come from MongoConfig, KafkaConfig, and SchedulerConfig companion objects
 
+  private val metricsServer: ZIO[PrometheusPublisher, Throwable, Any] =
+    ZIO.serviceWithZIO[PrometheusPublisher] { publisher =>
+      Server
+        .serve(Routes(Method.GET / "metrics" ->
+          Handler.fromZIO(publisher.get.map(Response.text))))
+        .provide(Server.defaultWithPort(8888))
+        .forkDaemon
+    }
+
   override def run: ZIO[ZIOAppArgs & Scope, Any, Any] =
-    program.provide(
+    (metricsServer *> program).provide(
       Runtime.setConfigProvider(TypesafeConfigProvider.fromResourcePath()),
       // ── Config layers ──────────────────────────────────────────────────
       ZLayer.fromZIO(ZIO.config[MongoConfig]),
       ZLayer.fromZIO(ZIO.config[KafkaConfig]),
       ZLayer.fromZIO(ZIO.config[SchedulerConfig]),
+      ZLayer.fromZIO(ZIO.config[OtelConfig]),
+      OtelLayer.live,
+      EvTracing.live,
       // ── MongoDB ────────────────────────────────────────────────────────
       MongoClientLayer.live,
       MongoDatabaseLayer.live,
       MongoSchedulerRepository.live,
       // ── Tasks ──────────────────────────────────────────────────────────
-      LiveSchedulerTasks.live
+      LiveSchedulerTasks.live,
+      ZLayer.succeed(MetricsConfig(5.seconds)),
+      prometheus.publisherLayer,
+      prometheus.prometheusLayer
     )
 
   private val program: ZIO[SchedulerConfig & SchedulerTasks, Throwable, Unit] =

@@ -140,6 +140,13 @@ object Dependencies {
     testContainersKafka % Test, zioTest % Test, zioTestSbt % Test
   )
 
+  // OTel shared library: config, EvTracing service, SDK lifecycle layer
+  val otelZioDeps: Seq[ModuleID] = Seq(
+    zio,
+    otelApi, otelSdk, otelExporter,
+    otelZio, // ZIO fiber-local context storage (ServiceLoader SPI)
+  )
+
   val serviceBaseDeps: Seq[ModuleID] = Seq(
     zio, zioStreams, zioHttp,
     zioConfig, zioConfigTypesafe, zioConfigMagnolia,
@@ -148,6 +155,7 @@ object Dependencies {
     tapirCore, tapirZioHttp, tapirCirce, tapirOpenApi, tapirSwaggerUi,
     logback,
     otelApi, otelSdk, otelExporter,
+    otelZio, // ZIO fiber context storage — must be on classpath at startup
     zioTest % Test, zioTestSbt % Test, zioTestMagnolia % Test
   )
 

@@ -1,0 +1,47 @@
+{{/*
+KEDA ScaledObject — scale ev-ocpp-gateway on the number of live WebSocket
+connections reported by the gateway_connected_stations Prometheus gauge.
+
+Enabled only when .Values.keda.enabled = true.  When enabled, KEDA manages
+its own HPA; the standard hpa.yaml in this chart is suppressed.
+
+Prerequisites:
+  - KEDA operator installed (keda.sh/v1alpha1 CRD available)
+  - Prometheus reachable at .Values.keda.prometheusUrl
+  - gateway_connected_stations metric emitted by ev-ocpp-gateway /metrics
+*/}}
+{{- if .Values.keda.enabled }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "ev-common.fullname" . }}
+  labels:
+    {{- include "ev-common.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "ev-common.fullname" . }}
+  minReplicaCount: {{ .Values.autoscaling.minReplicas }}
+  maxReplicaCount: {{ .Values.autoscaling.maxReplicas }}
+  # After scale-down, wait 60 s before scaling down again to avoid flapping
+  # during OCPP reconnect storms.
+  cooldownPeriod: 60
+  triggers:
+    # Scale out when average connections-per-pod exceeds the threshold.
+    # connectionsPerPod = 300 → at 300 * N connections, N+1 pods are requested.
+    - type: prometheus
+      metadata:
+        serverAddress: {{ .Values.keda.prometheusUrl }}
+        metricName: gateway_connected_stations
+        query: >-
+          sum(gateway_connected_stations{job="{{ include "ev-common.fullname" . }}"})
+            / {{ .Values.autoscaling.minReplicas }}
+        threshold: {{ .Values.keda.connectionsPerPod | quote }}
+    # Keep CPU as a secondary trigger so the gateway also scales on CPU load
+    # (e.g., high-frequency MeterValues floods from one station).
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: {{ .Values.autoscaling.targetCPUUtilizationPercentage | quote }}
+{{- end }}

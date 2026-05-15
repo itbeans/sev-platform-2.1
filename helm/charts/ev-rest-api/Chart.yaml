@@ -4,3 +4,8 @@ description: Dashboard REST API — Tapir-defined endpoints for all EV managemen
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
+
+dependencies:
+  - name: ev-common
+    version: "0.1.0"
+    repository: "file://../ev-common"

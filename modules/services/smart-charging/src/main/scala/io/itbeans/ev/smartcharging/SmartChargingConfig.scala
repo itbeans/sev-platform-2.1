@@ -20,7 +20,10 @@ case class SmartChargingConfig(
     defaultVoltage: Int,       // V — used when site area has no voltage configured
     defaultNumberPhases: Int,  // default number of phases per connector
     // Tenants to watch (empty = all tenants via Kafka headers)
-    defaultTenantId: String
+    defaultTenantId: String,
+    // OCPP Gateway gRPC endpoint — for SetChargingProfile delivery
+    gatewayGrpcHost: String,
+    gatewayGrpcPort: Int
 )
 
 object SmartChargingConfig:
@@ -35,9 +38,11 @@ object SmartChargingConfig:
       Config.int("periodicIntervalMins") zip
       Config.int("defaultVoltage") zip
       Config.int("defaultNumberPhases") zip
-      Config.string("defaultTenantId")
+      Config.string("defaultTenantId") zip
+      Config.string("gatewayGrpcHost") zip
+      Config.int("gatewayGrpcPort")
   ).nested("smartCharging").map {
-    case (httpPort, grpcPort, optimUrl, optimUser, optimPass, debounce, periodic, voltage, phases, tenantId) =>
+    case (httpPort, grpcPort, optimUrl, optimUser, optimPass, debounce, periodic, voltage, phases, tenantId, gwHost, gwPort) =>
       SmartChargingConfig(
         httpPort,
         grpcPort,
@@ -48,6 +53,8 @@ object SmartChargingConfig:
         periodic,
         voltage,
         phases,
-        tenantId
+        tenantId,
+        gwHost,
+        gwPort
       )
   }

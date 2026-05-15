@@ -70,3 +70,18 @@ object Site:
   given Schema[Site] = DeriveSchema.gen
   given Schema[SiteArea] = DeriveSchema.gen
   given Schema[Company] = DeriveSchema.gen
+
+// User ↔ Site assignment record (many-to-many, stored in `{tenantId}.userssites`)
+case class UserSite(
+    id: String,
+    tenantId: TenantId,
+    userId: UserId,
+    siteId: SiteId,
+    siteAdmin: Boolean,
+    siteOwner: Boolean,
+    createdOn: java.time.Instant,
+    lastChangedOn: java.time.Instant
+)
+
+object UserSite:
+  given Schema[UserSite] = DeriveSchema.gen

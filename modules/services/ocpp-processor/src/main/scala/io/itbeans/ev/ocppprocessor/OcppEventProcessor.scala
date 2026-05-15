@@ -11,6 +11,7 @@ import zio.kafka.consumer._
 import zio.kafka.serde.Serde
 
 import java.time.Instant
+import scala.jdk.CollectionConverters._
 
 // ---------------------------------------------------------------------------
 // OcppEventProcessor — core OCPP business logic Kafka consumer.
@@ -32,7 +33,8 @@ final class OcppEventProcessor(
     producer: EvKafkaProducer,
     config: KafkaConfig,
     authClient: ProcessorAuthClient,
-    gatewayClient: ProcessorGatewayClient
+    gatewayClient: ProcessorGatewayClient,
+    pricingClient: ProcessorPricingClient
 ):
 
   def startConsuming: Task[Unit] =
@@ -70,6 +72,7 @@ final class OcppEventProcessor(
         json.hcursor.downField("action").as[String]
       ).mapError(e => new Exception(e.message))
       _ <- ZIO.logDebug(s"[Processor] $action from $stationId ($tenantIdStr)")
+      _ <- Metric.counter("ocpp.events.total").tagged("action", action).increment
       _ <- action match
         case "BootNotification"              => handleBootNotification(json, tenantId, stationId)
         case "Heartbeat"                     => handleHeartbeat(json, tenantId, stationId)
@@ -168,26 +171,46 @@ final class OcppEventProcessor(
     val tagId       = cursor.downField("idTag").as[String].toOption
     val now         = java.util.Date.from(Instant.now())
 
-    val doc = new Document("_id", txIdStr)
-      .append("tenantId", tenantId.value)
-      .append("chargingStationId", stationId.value)
-      .append("connectorId", connectorId)
-      .append("tagId", tagId.orNull)
-      .append("meterStart", meterStart)
-      .append("timestamp", now)
-      .append("startDate", now)
-      .append("inProgress", true)
-      .append("createdOn", now)
-      .append("lastChangedOn", now)
-
-    repo.createTransaction(tenantId.value, doc) *>
-      publishTransactionLifecycle(tenantId, stationId, txIdStr, "Started", meterStart, now) *>
-      publishAuditLog(
+    for
+      // Resolve userId via auth service; fall back to tagId if unreachable
+      authResp <- authClient
+        .resolveOcppAuthorization(tenantId.value, tagId.getOrElse(""), stationId.value)
+        .tapError(err => ZIO.logWarning(s"[Processor] Auth lookup failed for tx $txIdStr: ${err.getMessage}"))
+        .option
+      resolvedUserId = authResp.filter(_.status == "Accepted")
+        .map(_.userId).filter(_.nonEmpty).orElse(tagId)
+      // Get connector info for tariff matching
+      stationDoc <- repo.getStation(tenantId.value, stationId.value)
+      (connectorType, connectorPowerKw) = extractConnectorInfo(stationDoc, connectorId)
+      pricingOpt <- pricingClient
+        .resolvePricing(tenantId.value, stationId.value, connectorId.toString, connectorType, connectorPowerKw, resolvedUserId.getOrElse(""), now.getTime)
+        .tapError(err => ZIO.logWarning(s"[Processor] ResolvePricing failed for tx $txIdStr: ${err.getMessage}"))
+        .option
+      doc = new Document("_id", txIdStr)
+        .append("tenantId", tenantId.value)
+        .append("chargingStationId", stationId.value)
+        .append("connectorId", connectorId)
+        .append("tagId", tagId.orNull)
+        .append("userId", resolvedUserId.orNull)
+        .append("connectorType", connectorType)
+        .append("connectorPowerKw", connectorPowerKw)
+        .append("meterStart", meterStart)
+        .append("pricingModelJson", pricingOpt.filter(_.found).map(_.pricingModelJson).orNull)
+        .append("pricingCurrency", pricingOpt.filter(_.found).map(_.currency).orNull)
+        .append("timestamp", now)
+        .append("startDate", now)
+        .append("inProgress", true)
+        .append("createdOn", now)
+        .append("lastChangedOn", now)
+      _ <- repo.createTransaction(tenantId.value, doc)
+      _ <- publishTransactionLifecycle(tenantId, stationId, txIdStr, "Started", meterStart, now)
+      _ <- publishAuditLog(
         tenantId,
         stationId,
         "StartTransaction",
         s"Transaction $txIdStr started on connector $connectorId"
       )
+    yield ()
 
   // ── StopTransaction (OCPP 1.6) ───────────────────────────────────────────
 
@@ -204,9 +227,46 @@ final class OcppEventProcessor(
       .append("stopReason", reason)
       .append("lastChangedOn", now)
 
-    repo.closeTransaction(tenantId.value, txIdStr, closeDoc) *>
-      publishTransactionLifecycle(tenantId, stationId, txIdStr, "Ended", meterStop, now) *>
-      publishAuditLog(tenantId, stationId, "StopTransaction", s"Transaction $txIdStr stopped: $reason")
+    for
+      _ <- repo.closeTransaction(tenantId.value, txIdStr, closeDoc)
+      txDocOpt <- repo.getTransaction(tenantId.value, txIdStr)
+      (meterStartWh, startEpochMs, userId, pricingModelJson, connectorType, connectorPowerKw) = txDocOpt match
+        case None => (0.0, now.getTime, None, None, "", 0.0)
+        case Some(d) =>
+          val ms  = Option(d.get("meterStart")).map(_.toString.toDoubleOption.getOrElse(0.0)).getOrElse(0.0)
+          val sd  = Option(d.getDate("startDate")).map(_.getTime).getOrElse(now.getTime)
+          val uid = Option(d.getString("userId")).orElse(Option(d.getString("tagId")))
+          val pmj = Option(d.getString("pricingModelJson")).filter(_.nonEmpty)
+          val ct  = Option(d.getString("connectorType")).getOrElse("")
+          val cpk = Option(d.get("connectorPowerKw")).map(_.toString.toDoubleOption.getOrElse(0.0)).getOrElse(0.0)
+          (ms, sd, uid, pmj, ct, cpk)
+      consumptionWh = math.max(0.0, meterStop - meterStartWh)
+      durationSecs = math.max(0L, (now.getTime - startEpochMs) / 1000)
+      finalPriceOpt <- pricingModelJson match
+        case None => ZIO.succeed(None)
+        case Some(pmj) =>
+          pricingClient
+            .finalisePrice(tenantId.value, txIdStr, pmj, consumptionWh, connectorType, connectorPowerKw, startEpochMs, now.getTime)
+            .map(Some(_))
+            .tapError(err => ZIO.logWarning(s"[Processor] FinalisePrice failed for tx $txIdStr: ${err.getMessage}"))
+            .option
+            .map(_.flatten)
+      _ <- finalPriceOpt.fold(ZIO.unit) { fp =>
+        repo.updateTransaction(
+          tenantId.value,
+          txIdStr,
+          new Document("totalCost", fp.totalPrice)
+            .append("pricingCurrency", fp.currency)
+            .append("invoiceItemJson", fp.invoiceItem)
+        )
+      }
+      _ <- publishTransactionLifecycleEnded(
+        tenantId, stationId, txIdStr,
+        meterStartWh, meterStop, startEpochMs, now.getTime,
+        consumptionWh, durationSecs, userId, finalPriceOpt
+      )
+      _ <- publishAuditLog(tenantId, stationId, "StopTransaction", s"Transaction $txIdStr stopped: $reason")
+    yield ()
 
   // ── MeterValues (OCPP 1.6) ───────────────────────────────────────────────
 
@@ -278,6 +338,45 @@ final class OcppEventProcessor(
 
       _ <- repo.insertConsumption(tenantId.value, doc)
       _ <- publishConsumptionIngest(tenantId, stationId, connectorId, txId, instantWatts, cumulatedKwh)
+
+      // Update real-time pricing for running transactions (fail-silent)
+      _ <- txId match
+        case None => ZIO.unit
+        case Some(txIdLong) =>
+          repo.getTransaction(tenantId.value, txIdLong.toString).flatMap {
+            case None => ZIO.unit
+            case Some(txDoc) =>
+              Option(txDoc.getString("pricingModelJson")).filter(_.nonEmpty) match
+                case None => ZIO.unit
+                case Some(pmj) =>
+                  val intervalEndMs    = now.getTime
+                  val intervalStartMs  = intervalEndMs - 60000L
+                  val connectorType    = Option(txDoc.getString("connectorType")).getOrElse("")
+                  val connectorPowerKw = Option(txDoc.get("connectorPowerKw")).map(_.toString.toDoubleOption.getOrElse(0.0)).getOrElse(0.0)
+                  pricingClient
+                    .priceConsumption(
+                      tenantId.value,
+                      txIdLong.toString,
+                      pmj,
+                      cumulatedKwh * 1000.0,
+                      instantWatts,
+                      connectorType,
+                      connectorPowerKw,
+                      intervalStartMs,
+                      intervalEndMs
+                    )
+                    .flatMap { r =>
+                      repo.updateTransaction(
+                        tenantId.value,
+                        txIdLong.toString,
+                        new Document("cumulatedPrice", r.cumulatedPrice).append("pricingCurrency", r.currency)
+                      )
+                    }
+                    .tapError(err =>
+                      ZIO.logWarning(s"[Processor] PriceConsumption failed for tx $txIdLong: ${err.getMessage}")
+                    )
+                    .ignore
+          }.ignore
     yield ()
 
   // ── TransactionEvent (OCPP 2.x) ──────────────────────────────────────────
@@ -298,27 +397,85 @@ final class OcppEventProcessor(
       case "Started" =>
         val connectorId = cursor.downField("evse").downField("connectorId").as[Int].getOrElse(1)
         val idToken     = cursor.downField("idToken").downField("idToken").as[String].toOption
-        val doc = new Document("_id", txId)
-          .append("tenantId", tenantId.value)
-          .append("chargingStationId", stationId.value)
-          .append("connectorId", connectorId)
-          .append("tagId", idToken.orNull)
-          .append("meterStart", meterValue)
-          .append("timestamp", now).append("startDate", now)
-          .append("inProgress", true)
-          .append("createdOn", now).append("lastChangedOn", now)
-        repo.createTransaction(tenantId.value, doc) *>
-          publishTransactionLifecycle(tenantId, stationId, txId, "Started", meterValue, now) *>
-          publishAuditLog(tenantId, stationId, "TransactionEvent", s"Tx $txId started")
+        for
+          authResp <- authClient
+            .resolveOcppAuthorization(tenantId.value, idToken.getOrElse(""), stationId.value)
+            .tapError(err => ZIO.logWarning(s"[Processor] Auth lookup failed for tx $txId: ${err.getMessage}"))
+            .option
+          resolvedUserId = authResp.filter(_.status == "Accepted")
+            .map(_.userId).filter(_.nonEmpty).orElse(idToken)
+          stationDoc <- repo.getStation(tenantId.value, stationId.value)
+          (connectorType, connectorPowerKw) = extractConnectorInfo(stationDoc, connectorId)
+          pricingOpt <- pricingClient
+            .resolvePricing(tenantId.value, stationId.value, connectorId.toString, connectorType, connectorPowerKw, resolvedUserId.getOrElse(""), now.getTime)
+            .tapError(err => ZIO.logWarning(s"[Processor] ResolvePricing failed for tx $txId: ${err.getMessage}"))
+            .option
+          doc = new Document("_id", txId)
+            .append("tenantId", tenantId.value)
+            .append("chargingStationId", stationId.value)
+            .append("connectorId", connectorId)
+            .append("tagId", idToken.orNull)
+            .append("userId", resolvedUserId.orNull)
+            .append("connectorType", connectorType)
+            .append("connectorPowerKw", connectorPowerKw)
+            .append("meterStart", meterValue)
+            .append("pricingModelJson", pricingOpt.filter(_.found).map(_.pricingModelJson).orNull)
+            .append("pricingCurrency", pricingOpt.filter(_.found).map(_.currency).orNull)
+            .append("timestamp", now).append("startDate", now)
+            .append("inProgress", true)
+            .append("createdOn", now).append("lastChangedOn", now)
+          _ <- repo.createTransaction(tenantId.value, doc)
+          _ <- publishTransactionLifecycle(tenantId, stationId, txId, "Started", meterValue, now)
+          _ <- publishAuditLog(tenantId, stationId, "TransactionEvent", s"Tx $txId started")
+        yield ()
 
       case "Ended" =>
         val reason = cursor.downField("reason").as[String].getOrElse("Other")
         val closeDoc = new Document()
           .append("endDate", now).append("meterStop", meterValue)
           .append("stopReason", reason).append("lastChangedOn", now)
-        repo.closeTransaction(tenantId.value, txId, closeDoc) *>
-          publishTransactionLifecycle(tenantId, stationId, txId, "Ended", meterValue, now) *>
-          publishAuditLog(tenantId, stationId, "TransactionEvent", s"Tx $txId ended: $reason")
+        for
+          _ <- repo.closeTransaction(tenantId.value, txId, closeDoc)
+          txDocOpt <- repo.getTransaction(tenantId.value, txId)
+          (meterStartWh, startEpochMs, userId, pricingModelJson, connectorType, connectorPowerKw) = txDocOpt match
+            case None => (0.0, now.getTime, None, None, "", 0.0)
+            case Some(d) =>
+              val ms  = Option(d.get("meterStart")).map(_.toString.toDoubleOption.getOrElse(0.0)).getOrElse(0.0)
+              val sd  = Option(d.getDate("startDate")).map(_.getTime).getOrElse(now.getTime)
+              val uid = Option(d.getString("userId")).orElse(Option(d.getString("tagId")))
+              val pmj = Option(d.getString("pricingModelJson")).filter(_.nonEmpty)
+              val ct  = Option(d.getString("connectorType")).getOrElse("")
+              val cpk = Option(d.get("connectorPowerKw")).map(_.toString.toDoubleOption.getOrElse(0.0)).getOrElse(0.0)
+              (ms, sd, uid, pmj, ct, cpk)
+          consumptionWh = math.max(0.0, meterValue - meterStartWh)
+          durationSecs = math.max(0L, (now.getTime - startEpochMs) / 1000)
+          finalPriceOpt <- pricingModelJson match
+            case None => ZIO.succeed(None)
+            case Some(pmj) =>
+              pricingClient
+                .finalisePrice(tenantId.value, txId, pmj, consumptionWh, connectorType, connectorPowerKw, startEpochMs, now.getTime)
+                .map(Some(_))
+                .tapError(err =>
+                  ZIO.logWarning(s"[Processor] FinalisePrice failed for tx $txId: ${err.getMessage}")
+                )
+                .option
+                .map(_.flatten)
+          _ <- finalPriceOpt.fold(ZIO.unit) { fp =>
+            repo.updateTransaction(
+              tenantId.value,
+              txId,
+              new Document("totalCost", fp.totalPrice)
+                .append("pricingCurrency", fp.currency)
+                .append("invoiceItemJson", fp.invoiceItem)
+            )
+          }
+          _ <- publishTransactionLifecycleEnded(
+            tenantId, stationId, txId,
+            meterStartWh, meterValue, startEpochMs, now.getTime,
+            consumptionWh, durationSecs, userId, finalPriceOpt
+          )
+          _ <- publishAuditLog(tenantId, stationId, "TransactionEvent", s"Tx $txId ended: $reason")
+        yield ()
 
       case _ /* Updated */ =>
         val connectorId = cursor.downField("evse").downField("connectorId").as[Int].getOrElse(1)
@@ -378,6 +535,19 @@ final class OcppEventProcessor(
     ZIO.logInfo(s"[Processor] AFRRSignal $signal mW from ${stationId.value}") *>
       publishSmartChargingTrigger(tenantId, stationId)
 
+  // ── Connector metadata helper ─────────────────────────────────────────────
+
+  private def extractConnectorInfo(stationDoc: Option[Document], connectorId: Int): (String, Double) =
+    stationDoc.flatMap { doc =>
+      Option(doc.getList("connectors", classOf[Document]))
+        .flatMap(_.asScala.find(_.getInteger("connectorId", -1) == connectorId))
+        .map { c =>
+          val t  = Option(c.getString("connectorType")).getOrElse("")
+          val kw = Option(c.get("powerKw")).map(_.toString.toDoubleOption.getOrElse(0.0)).getOrElse(0.0)
+          (t, kw)
+        }
+    }.getOrElse(("", 0.0))
+
   // ── Kafka publishing helpers ──────────────────────────────────────────────
 
   private def publishTransactionLifecycle(
@@ -426,7 +596,44 @@ final class OcppEventProcessor(
       "instantWatts"      -> Json.fromDouble(watts).getOrElse(Json.fromInt(0)),
       "cumulatedKwh"      -> Json.fromDouble(kwh).getOrElse(Json.fromInt(0))
     )
-    producer.publish(Topics.auditLog, stationId.value, event)
+    producer.publish(Topics.consumptionsIngest, stationId.value, event)
+
+  private def publishTransactionLifecycleEnded(
+      tenantId: TenantId,
+      stationId: ChargingStationId,
+      txId: String,
+      meterStartWh: Double,
+      meterStopWh: Double,
+      startEpochMs: Long,
+      endEpochMs: Long,
+      consumptionWh: Double,
+      durationSecs: Long,
+      userId: Option[String],
+      finalPrice: Option[FinalisePriceResponse]
+  ): Task[Unit] =
+    val event = Json.obj(
+      "tenantId"          -> Json.fromString(tenantId.value),
+      "chargingStationId" -> Json.fromString(stationId.value),
+      "transactionId"     -> Json.fromString(txId),
+      "action"            -> Json.fromString("Ended"),
+      "meterValue"        -> Json.fromDouble(meterStopWh).getOrElse(Json.fromInt(0)),
+      "timestamp"         -> Json.fromLong(endEpochMs),
+      "userId"            -> userId.fold(Json.Null)(Json.fromString),
+      "meterStart"        -> Json.fromDouble(meterStartWh).getOrElse(Json.fromInt(0)),
+      "meterStop"         -> Json.fromDouble(meterStopWh).getOrElse(Json.fromInt(0)),
+      "startDate"         -> Json.fromLong(startEpochMs),
+      "endDate"           -> Json.fromLong(endEpochMs),
+      "totalDurationSecs" -> Json.fromLong(durationSecs),
+      "consumptionWh"     -> Json.fromDouble(consumptionWh).getOrElse(Json.fromInt(0)),
+      "priceUnit"         -> finalPrice.fold(Json.Null)(fp => Json.fromString(fp.currency.toLowerCase)),
+      "totalCost"         -> finalPrice.fold(Json.Null)(fp =>
+        Json.fromDouble(fp.totalPrice).getOrElse(Json.Null)
+      ),
+      "invoiceItemJson"   -> finalPrice.filter(_.invoiceItem.nonEmpty).fold(Json.Null)(fp =>
+        Json.fromString(fp.invoiceItem)
+      )
+    )
+    producer.publish(Topics.transactionLifecycle, txId, event)
 
   private def publishAuditLog(
       tenantId: TenantId,
@@ -448,7 +655,7 @@ final class OcppEventProcessor(
 object OcppEventProcessor:
 
   val live: ZLayer[
-    ProcessorRepository & EvKafkaProducer & KafkaConfig & ProcessorAuthClient & ProcessorGatewayClient,
+    ProcessorRepository & EvKafkaProducer & KafkaConfig & ProcessorAuthClient & ProcessorGatewayClient & ProcessorPricingClient,
     Nothing,
     OcppEventProcessor
-  ] = ZLayer.fromFunction(OcppEventProcessor(_, _, _, _, _))
+  ] = ZLayer.fromFunction(OcppEventProcessor(_, _, _, _, _, _))
