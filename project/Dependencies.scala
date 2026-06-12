@@ -25,8 +25,6 @@ object Dependencies {
     val otelAlpha      = "1.43.0-alpha"
     val testContainers = "0.41.4"
     val scalaCheck     = "1.18.1"
-    val pact           = "4.6.16"
-    val pact4s         = "0.11.2"
   }
 
   // ── ZIO core ──────────────────────────────────────────────────────────────
@@ -109,10 +107,6 @@ object Dependencies {
   val testContainersKafka  = "com.dimafeng" %% "testcontainers-scala-kafka"     % Versions.testContainers
   val testContainersPg     = "com.dimafeng" %% "testcontainers-scala-postgresql"% Versions.testContainers
   val scalaCheck           = "org.scalacheck" %% "scalacheck"                   % Versions.scalaCheck
-
-  // ── Pact contract testing ─────────────────────────────────────────────────
-  val pact4sZioTest = "io.github.jbwheatley" %% "pact4s-zio-test" % Versions.pact4s
-  val pact4sCirce   = "io.github.jbwheatley" %% "pact4s-circe"    % Versions.pact4s
 
   // ── Grouped dependency sets per module ────────────────────────────────────
 

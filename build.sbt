@@ -131,10 +131,7 @@ lazy val ocppProcessor = serviceProject("ocpp-processor", "ocpp-processor")
 // Dashboard REST API (Tapir endpoints)
 lazy val restApi = serviceProject("rest-api", "rest-api")
   .settings(
-    libraryDependencies ++= grpcDeps ++ Seq(
-      pact4sZioTest % Test,
-      pact4sCirce   % Test,
-    ),
+    libraryDependencies ++= grpcDeps,
     dockerExposedPorts := Seq(80, 443, 9090),
   )
   .dependsOn(proto)
@@ -152,8 +149,6 @@ lazy val billingService = serviceProject("billing-service", "billing-service")
   .settings(
     libraryDependencies ++= grpcDeps ++ Seq(
       doobieCore, doobiePostgres, doobieHikari,
-      pact4sZioTest % Test,
-      pact4sCirce   % Test,
     ),
     dockerExposedPorts := Seq(8080, 9090),
   )

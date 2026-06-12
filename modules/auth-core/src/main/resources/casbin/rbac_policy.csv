@@ -24,345 +24,401 @@ g, SiteAdmin, Basic
 g, SiteOwner, Basic
 
 # ── SuperAdmin: unrestricted ─────────────────────────────────────────────────
-p, SuperAdmin, *, *
+p, SuperAdmin, *, *, allow
 
 # ── Admin: tenant-wide access (ABAC handles LocalIssuer restrictions) ────────
-p, Admin, *, *
+p, Admin, *, *, allow
 
 # ============================================================================
 # SiteAdmin — additional grants on top of Basic (inherited via g, SiteAdmin, Basic)
 # ============================================================================
 
 # Tag — site admin can assign/unassign tags
-p, SiteAdmin, Tag, Assign
-p, SiteAdmin, Tag, Unassign
-p, SiteAdmin, Tag, UpdateByVisualId
+p, SiteAdmin, Tag, Assign, allow
+p, SiteAdmin, Tag, Unassign, allow
+p, SiteAdmin, Tag, UpdateByVisualId, allow
 
 # User — site admin can manage users within their sites
-p, SiteAdmin, User, List
-p, SiteAdmin, User, Read
-p, SiteAdmin, User, Create
-p, SiteAdmin, User, Update
-p, SiteAdmin, User, Delete
-p, SiteAdmin, User, SynchronizeBillingUser
-p, SiteAdmin, User, AssignUnassignSites
+p, SiteAdmin, User, List, allow
+p, SiteAdmin, User, Read, allow
+p, SiteAdmin, User, Create, allow
+p, SiteAdmin, User, Update, allow
+p, SiteAdmin, User, Delete, allow
+p, SiteAdmin, User, SynchronizeBillingUser, allow
+p, SiteAdmin, User, AssignUnassignSites, allow
 
 # UserSite — site-user relationship management
-p, SiteAdmin, UserSite, AssignSitesToUser
-p, SiteAdmin, UserSite, UnassignSitesFromUser
-p, SiteAdmin, UserSite, Read
-p, SiteAdmin, UserSite, Update
-p, SiteAdmin, UserSite, List
+p, SiteAdmin, UserSite, AssignSitesToUser, allow
+p, SiteAdmin, UserSite, UnassignSitesFromUser, allow
+p, SiteAdmin, UserSite, Read, allow
+p, SiteAdmin, UserSite, Update, allow
+p, SiteAdmin, UserSite, List, allow
 
 # SiteUser — user-site relationship management
-p, SiteAdmin, SiteUser, AssignUsersToSite
-p, SiteAdmin, SiteUser, UnassignUsersFromSite
-p, SiteAdmin, SiteUser, Read
-p, SiteAdmin, SiteUser, Update
-p, SiteAdmin, SiteUser, List
+p, SiteAdmin, SiteUser, AssignUsersToSite, allow
+p, SiteAdmin, SiteUser, UnassignUsersFromSite, allow
+p, SiteAdmin, SiteUser, Read, allow
+p, SiteAdmin, SiteUser, Update, allow
+p, SiteAdmin, SiteUser, List, allow
 
 # Site — update/manage assigned sites
-p, SiteAdmin, Site, List
-p, SiteAdmin, Site, Read
-p, SiteAdmin, Site, Update
-p, SiteAdmin, Site, MaintainPricingDefinitions
-p, SiteAdmin, Site, ExportOcppParams
-p, SiteAdmin, Site, AssignUnassignUsers
+p, SiteAdmin, Site, List, allow
+p, SiteAdmin, Site, Read, allow
+p, SiteAdmin, Site, Update, allow
+p, SiteAdmin, Site, MaintainPricingDefinitions, allow
+p, SiteAdmin, Site, ExportOcppParams, allow
+p, SiteAdmin, Site, AssignUnassignUsers, allow
 
 # SiteArea — full management within assigned sites
-p, SiteAdmin, SiteArea, List
-p, SiteAdmin, SiteArea, Read
-p, SiteAdmin, SiteArea, ReadChargingStationsFromSiteArea
-p, SiteAdmin, SiteArea, Create
-p, SiteAdmin, SiteArea, Update
-p, SiteAdmin, SiteArea, Delete
-p, SiteAdmin, SiteArea, AssignAssets
-p, SiteAdmin, SiteArea, UnassignAssets
-p, SiteAdmin, SiteArea, ReadAssets
-p, SiteAdmin, SiteArea, AssignChargingStations
-p, SiteAdmin, SiteArea, UnassignChargingStations
-p, SiteAdmin, SiteArea, ExportOcppParams
-p, SiteAdmin, SiteArea, GenerateQrCode
+p, SiteAdmin, SiteArea, List, allow
+p, SiteAdmin, SiteArea, Read, allow
+p, SiteAdmin, SiteArea, ReadChargingStationsFromSiteArea, allow
+p, SiteAdmin, SiteArea, Create, allow
+p, SiteAdmin, SiteArea, Update, allow
+p, SiteAdmin, SiteArea, Delete, allow
+p, SiteAdmin, SiteArea, AssignAssets, allow
+p, SiteAdmin, SiteArea, UnassignAssets, allow
+p, SiteAdmin, SiteArea, ReadAssets, allow
+p, SiteAdmin, SiteArea, AssignChargingStations, allow
+p, SiteAdmin, SiteArea, UnassignChargingStations, allow
+p, SiteAdmin, SiteArea, ExportOcppParams, allow
+p, SiteAdmin, SiteArea, GenerateQrCode, allow
 
 # ChargingStation — full OCPP control within assigned sites
-p, SiteAdmin, ChargingStation, List
-p, SiteAdmin, ChargingStation, Read
-p, SiteAdmin, ChargingStation, Update
-p, SiteAdmin, ChargingStation, Delete
-p, SiteAdmin, ChargingStation, Reset
-p, SiteAdmin, ChargingStation, ClearCache
-p, SiteAdmin, ChargingStation, ChangeAvailability
-p, SiteAdmin, ChargingStation, GetConfiguration
-p, SiteAdmin, ChargingStation, ChangeConfiguration
-p, SiteAdmin, ChargingStation, StopTransaction
-p, SiteAdmin, ChargingStation, StartTransaction
-p, SiteAdmin, ChargingStation, Authorize
-p, SiteAdmin, ChargingStation, SetChargingProfile
-p, SiteAdmin, ChargingStation, GetCompositeSchedule
-p, SiteAdmin, ChargingStation, ClearChargingProfile
-p, SiteAdmin, ChargingStation, GetDiagnostics
-p, SiteAdmin, ChargingStation, UpdateFirmware
-p, SiteAdmin, ChargingStation, ExportOcppParams
-p, SiteAdmin, ChargingStation, DataTransfer
-p, SiteAdmin, ChargingStation, RemoteStart
-p, SiteAdmin, ChargingStation, RemoteStop
-p, SiteAdmin, ChargingStation, RemoteStartTransaction
-p, SiteAdmin, ChargingStation, RemoteStopTransaction
-p, SiteAdmin, ChargingStation, UnlockConnector
-p, SiteAdmin, ChargingStation, Export
-p, SiteAdmin, ChargingStation, GetStatusNotification
-p, SiteAdmin, ChargingStation, GetBootNotification
-p, SiteAdmin, ChargingStation, InError
-p, SiteAdmin, ChargingStation, GenerateQrCode
-p, SiteAdmin, ChargingStation, GetConnectorQrCode
-p, SiteAdmin, ChargingStation, MaintainPricingDefinitions
-p, SiteAdmin, ChargingStation, ViewUserData
-p, SiteAdmin, ChargingStation, ReserveNow
+p, SiteAdmin, ChargingStation, List, allow
+p, SiteAdmin, ChargingStation, Read, allow
+p, SiteAdmin, ChargingStation, Update, allow
+p, SiteAdmin, ChargingStation, Delete, allow
+p, SiteAdmin, ChargingStation, Reset, allow
+p, SiteAdmin, ChargingStation, ClearCache, allow
+p, SiteAdmin, ChargingStation, ChangeAvailability, allow
+p, SiteAdmin, ChargingStation, GetConfiguration, allow
+p, SiteAdmin, ChargingStation, ChangeConfiguration, allow
+p, SiteAdmin, ChargingStation, StopTransaction, allow
+p, SiteAdmin, ChargingStation, StartTransaction, allow
+p, SiteAdmin, ChargingStation, Authorize, allow
+p, SiteAdmin, ChargingStation, SetChargingProfile, allow
+p, SiteAdmin, ChargingStation, GetCompositeSchedule, allow
+p, SiteAdmin, ChargingStation, ClearChargingProfile, allow
+p, SiteAdmin, ChargingStation, GetDiagnostics, allow
+p, SiteAdmin, ChargingStation, UpdateFirmware, allow
+p, SiteAdmin, ChargingStation, ExportOcppParams, allow
+p, SiteAdmin, ChargingStation, DataTransfer, allow
+p, SiteAdmin, ChargingStation, RemoteStart, allow
+p, SiteAdmin, ChargingStation, RemoteStop, allow
+p, SiteAdmin, ChargingStation, RemoteStartTransaction, allow
+p, SiteAdmin, ChargingStation, RemoteStopTransaction, allow
+p, SiteAdmin, ChargingStation, UnlockConnector, allow
+p, SiteAdmin, ChargingStation, Export, allow
+p, SiteAdmin, ChargingStation, GetStatusNotification, allow
+p, SiteAdmin, ChargingStation, GetBootNotification, allow
+p, SiteAdmin, ChargingStation, InError, allow
+p, SiteAdmin, ChargingStation, GenerateQrCode, allow
+p, SiteAdmin, ChargingStation, GetConnectorQrCode, allow
+p, SiteAdmin, ChargingStation, MaintainPricingDefinitions, allow
+p, SiteAdmin, ChargingStation, ViewUserData, allow
+p, SiteAdmin, ChargingStation, ReserveNow, allow
 
 # Connector — OCPP connector-level commands
-p, SiteAdmin, Connector, StopTransaction
-p, SiteAdmin, Connector, StartTransaction
-p, SiteAdmin, Connector, RemoteStop
-p, SiteAdmin, Connector, RemoteStart
-p, SiteAdmin, Connector, RemoteStartTransaction
-p, SiteAdmin, Connector, RemoteStopTransaction
-p, SiteAdmin, Connector, ViewUserData
+p, SiteAdmin, Connector, StopTransaction, allow
+p, SiteAdmin, Connector, StartTransaction, allow
+p, SiteAdmin, Connector, RemoteStop, allow
+p, SiteAdmin, Connector, RemoteStart, allow
+p, SiteAdmin, Connector, RemoteStartTransaction, allow
+p, SiteAdmin, Connector, RemoteStopTransaction, allow
+p, SiteAdmin, Connector, ViewUserData, allow
 
 # ChargingProfile — smart charging profiles
-p, SiteAdmin, ChargingProfile, List
-p, SiteAdmin, ChargingProfile, Read
-p, SiteAdmin, ChargingProfile, Create
-p, SiteAdmin, ChargingProfile, Update
-p, SiteAdmin, ChargingProfile, Delete
+p, SiteAdmin, ChargingProfile, List, allow
+p, SiteAdmin, ChargingProfile, Read, allow
+p, SiteAdmin, ChargingProfile, Create, allow
+p, SiteAdmin, ChargingProfile, Update, allow
+p, SiteAdmin, ChargingProfile, Delete, allow
 
 # Transaction — read/export within site scope
-p, SiteAdmin, Transaction, List
-p, SiteAdmin, Transaction, Read
-p, SiteAdmin, Transaction, GetChargingStationTransactions
-p, SiteAdmin, Transaction, GetActiveTransaction
-p, SiteAdmin, Transaction, GetCompletedTransaction
-p, SiteAdmin, Transaction, GetRefundableTransaction
-p, SiteAdmin, Transaction, GetRefundReport
-p, SiteAdmin, Transaction, ExportCompletedTransaction
+p, SiteAdmin, Transaction, List, allow
+p, SiteAdmin, Transaction, Read, allow
+p, SiteAdmin, Transaction, GetChargingStationTransactions, allow
+p, SiteAdmin, Transaction, GetActiveTransaction, allow
+p, SiteAdmin, Transaction, GetCompletedTransaction, allow
+p, SiteAdmin, Transaction, GetRefundableTransaction, allow
+p, SiteAdmin, Transaction, GetRefundReport, allow
+p, SiteAdmin, Transaction, ExportCompletedTransaction, allow
 
 # Statistic — site-scoped statistics (both enum names for compatibility)
-p, SiteAdmin, Statistic, Read
-p, SiteAdmin, Statistic, Export
-p, SiteAdmin, Statistics, Read
-p, SiteAdmin, Statistics, Export
+p, SiteAdmin, Statistic, Read, allow
+p, SiteAdmin, Statistic, Export, allow
+p, SiteAdmin, Statistics, Read, allow
+p, SiteAdmin, Statistics, Export, allow
 
 # Logging — site-scoped logs
-p, SiteAdmin, Logging, List
-p, SiteAdmin, Logging, Read
-p, SiteAdmin, Logging, Export
-p, SiteAdmin, Log, List
-p, SiteAdmin, Log, Read
+p, SiteAdmin, Logging, List, allow
+p, SiteAdmin, Logging, Read, allow
+p, SiteAdmin, Logging, Export, allow
+p, SiteAdmin, Log, List, allow
+p, SiteAdmin, Log, Read, allow
 
 # Asset — full management
-p, SiteAdmin, Asset, List
-p, SiteAdmin, Asset, Read
-p, SiteAdmin, Asset, Create
-p, SiteAdmin, Asset, Update
-p, SiteAdmin, Asset, Delete
-p, SiteAdmin, Asset, ReadConsumption
-p, SiteAdmin, Asset, RetrieveConsumption
-p, SiteAdmin, Asset, CreateConsumption
-p, SiteAdmin, Asset, CheckConnection
+p, SiteAdmin, Asset, List, allow
+p, SiteAdmin, Asset, Read, allow
+p, SiteAdmin, Asset, Create, allow
+p, SiteAdmin, Asset, Update, allow
+p, SiteAdmin, Asset, Delete, allow
+p, SiteAdmin, Asset, ReadConsumption, allow
+p, SiteAdmin, Asset, RetrieveConsumption, allow
+p, SiteAdmin, Asset, CreateConsumption, allow
+p, SiteAdmin, Asset, CheckConnection, allow
 
 # PricingDefinition — pricing management for sites
-p, SiteAdmin, PricingDefinition, List
-p, SiteAdmin, PricingDefinition, Read
-p, SiteAdmin, PricingDefinition, Create
-p, SiteAdmin, PricingDefinition, Update
-p, SiteAdmin, PricingDefinition, Delete
+p, SiteAdmin, PricingDefinition, List, allow
+p, SiteAdmin, PricingDefinition, Read, allow
+p, SiteAdmin, PricingDefinition, Create, allow
+p, SiteAdmin, PricingDefinition, Update, allow
+p, SiteAdmin, PricingDefinition, Delete, allow
 
 # ============================================================================
 # SiteOwner — additional grants on top of Basic
 # ============================================================================
 
 # User — read users within owned sites
-p, SiteOwner, User, List
-p, SiteOwner, User, Read
+p, SiteOwner, User, List, allow
+p, SiteOwner, User, Read, allow
 
 # UserSite / SiteUser — read-only
-p, SiteOwner, UserSite, Read
-p, SiteOwner, UserSite, List
-p, SiteOwner, SiteUser, Read
-p, SiteOwner, SiteUser, List
+p, SiteOwner, UserSite, Read, allow
+p, SiteOwner, UserSite, List, allow
+p, SiteOwner, SiteUser, Read, allow
+p, SiteOwner, SiteUser, List, allow
 
 # Statistic — owner-scoped statistics
-p, SiteOwner, Statistic, Read
-p, SiteOwner, Statistic, Export
-p, SiteOwner, Statistics, Read
-p, SiteOwner, Statistics, Export
+p, SiteOwner, Statistic, Read, allow
+p, SiteOwner, Statistic, Export, allow
+p, SiteOwner, Statistics, Read, allow
+p, SiteOwner, Statistics, Export, allow
 
 # Transaction — owner-scoped read/export
-p, SiteOwner, Transaction, Read
-p, SiteOwner, Transaction, GetChargingStationTransactions
-p, SiteOwner, Transaction, GetActiveTransaction
-p, SiteOwner, Transaction, GetCompletedTransaction
-p, SiteOwner, Transaction, GetRefundableTransaction
-p, SiteOwner, Transaction, GetRefundReport
-p, SiteOwner, Transaction, ExportCompletedTransaction
+p, SiteOwner, Transaction, Read, allow
+p, SiteOwner, Transaction, GetChargingStationTransactions, allow
+p, SiteOwner, Transaction, GetActiveTransaction, allow
+p, SiteOwner, Transaction, GetCompletedTransaction, allow
+p, SiteOwner, Transaction, GetRefundableTransaction, allow
+p, SiteOwner, Transaction, GetRefundReport, allow
+p, SiteOwner, Transaction, ExportCompletedTransaction, allow
 
 # ============================================================================
 # Basic — own data only (OwnUser / AssignedSites ABAC filters applied)
 # ============================================================================
 
 # Own user profile
-p, Basic, User, Read
-p, Basic, User, Update
+p, Basic, User, Read, allow
+p, Basic, User, Update, allow
 
 # Global settings (read-only)
-p, Basic, Setting, Read
 
 # Car catalog (public reference data)
-p, Basic, CarCatalog, List
-p, Basic, CarCatalog, Read
+p, Basic, CarCatalog, List, allow
+p, Basic, CarCatalog, Read, allow
 
 # Own cars
-p, Basic, Car, List
-p, Basic, Car, Read
-p, Basic, Car, Create
-p, Basic, Car, Update
-p, Basic, Car, Delete
+p, Basic, Car, List, allow
+p, Basic, Car, Read, allow
+p, Basic, Car, Create, allow
+p, Basic, Car, Update, allow
+p, Basic, Car, Delete, allow
 
 # Companies (assigned sites filter)
-p, Basic, Company, List
-p, Basic, Company, Read
 
 # Invoices (own user)
-p, Basic, Invoice, List
-p, Basic, Invoice, Read
-p, Basic, Invoice, Download
+p, Basic, Invoice, List, allow
+p, Basic, Invoice, Read, allow
+p, Basic, Invoice, Download, allow
 
 # Billing transfer downloads
-p, Basic, BillingTransfer, Download
+p, Basic, BillingTransfer, Download, allow
 
 # Payment methods (own user)
-p, Basic, PaymentMethod, List
-p, Basic, PaymentMethod, Read
-p, Basic, PaymentMethod, Create
-p, Basic, PaymentMethod, Delete
+p, Basic, PaymentMethod, List, allow
+p, Basic, PaymentMethod, Read, allow
+p, Basic, PaymentMethod, Create, allow
+p, Basic, PaymentMethod, Delete, allow
 
 # Sites (assigned sites filter)
-p, Basic, Site, List
-p, Basic, Site, Read
+p, Basic, Site, List, allow
+p, Basic, Site, Read, allow
 
 # Site areas (assigned sites filter)
-p, Basic, SiteArea, List
-p, Basic, SiteArea, Read
-p, Basic, SiteArea, ReadChargingStationsFromSiteArea
+p, Basic, SiteArea, List, allow
+p, Basic, SiteArea, Read, allow
+p, Basic, SiteArea, ReadChargingStationsFromSiteArea, allow
 
 # Charging stations (assigned sites filter)
-p, Basic, ChargingStation, List
-p, Basic, ChargingStation, Read
-p, Basic, ChargingStation, RemoteStart
-p, Basic, ChargingStation, RemoteStop
-p, Basic, ChargingStation, RemoteStartTransaction
-p, Basic, ChargingStation, RemoteStopTransaction
-p, Basic, ChargingStation, ReserveNow
-p, Basic, ChargingStation, StartTransaction
-p, Basic, ChargingStation, StopTransaction
-p, Basic, ChargingStation, Authorize
-p, Basic, ChargingStation, GetConnectorQrCode
-p, Basic, ChargingStation, PushTransactionCdr
-p, Basic, ChargingStation, ViewUserData
+p, Basic, ChargingStation, List, allow
+p, Basic, ChargingStation, Read, allow
+p, Basic, ChargingStation, RemoteStart, allow
+p, Basic, ChargingStation, RemoteStop, allow
+p, Basic, ChargingStation, RemoteStartTransaction, allow
+p, Basic, ChargingStation, RemoteStopTransaction, allow
+p, Basic, ChargingStation, ReserveNow, allow
+p, Basic, ChargingStation, StartTransaction, allow
+p, Basic, ChargingStation, StopTransaction, allow
+p, Basic, ChargingStation, Authorize, allow
+p, Basic, ChargingStation, GetConnectorQrCode, allow
+p, Basic, ChargingStation, PushTransactionCdr, allow
+p, Basic, ChargingStation, ViewUserData, allow
 
 # Connector-level operations (own user / assigned sites)
-p, Basic, Connector, StartTransaction
-p, Basic, Connector, StopTransaction
-p, Basic, Connector, RemoteStop
-p, Basic, Connector, RemoteStart
-p, Basic, Connector, RemoteStartTransaction
-p, Basic, Connector, RemoteStopTransaction
-p, Basic, Connector, ViewUserData
+p, Basic, Connector, StartTransaction, allow
+p, Basic, Connector, StopTransaction, allow
+p, Basic, Connector, RemoteStop, allow
+p, Basic, Connector, RemoteStart, allow
+p, Basic, Connector, RemoteStartTransaction, allow
+p, Basic, Connector, RemoteStopTransaction, allow
+p, Basic, Connector, ViewUserData, allow
 
 # Own RFID tags
-p, Basic, Tag, List
-p, Basic, Tag, Read
-p, Basic, Tag, Assign
-p, Basic, Tag, Unassign
-p, Basic, Tag, UpdateByVisualId
+p, Basic, Tag, List, allow
+p, Basic, Tag, Read, allow
+p, Basic, Tag, Assign, allow
+p, Basic, Tag, Unassign, allow
+p, Basic, Tag, UpdateByVisualId, allow
 
 # Own statistics
-p, Basic, Statistic, Read
-p, Basic, Statistic, Export
-p, Basic, Statistics, Read
-p, Basic, Statistics, Export
+p, Basic, Statistic, Export, allow
+p, Basic, Statistics, Read, allow
+p, Basic, Statistics, Export, allow
 
 # Own transactions
-p, Basic, Transaction, List
-p, Basic, Transaction, Read
-p, Basic, Transaction, GetChargingStationTransactions
-p, Basic, Transaction, GetActiveTransaction
-p, Basic, Transaction, GetCompletedTransaction
-p, Basic, Transaction, GetRefundReport
+p, Basic, Transaction, List, allow
+p, Basic, Transaction, Read, allow
+p, Basic, Transaction, GetChargingStationTransactions, allow
+p, Basic, Transaction, GetActiveTransaction, allow
+p, Basic, Transaction, GetCompletedTransaction, allow
+p, Basic, Transaction, GetRefundReport, allow
 
 # Notifications (own user)
-p, Basic, Notification, Read
-p, Basic, Notification, Create
-p, Basic, Notification, Delete
 
 # Asset consumption (assigned sites)
-p, Basic, Asset, List
-p, Basic, Asset, Read
-p, Basic, Asset, ReadConsumption
+p, Basic, Asset, ReadConsumption, allow
 
 # ============================================================================
 # Demo — read-only subset (AssignedSites ABAC filter)
 # ============================================================================
 
 # Own user profile (read-only)
-p, Demo, User, Read
 
 # Assets (read-only)
-p, Demo, Asset, List
-p, Demo, Asset, Read
-p, Demo, Asset, ReadConsumption
+p, Demo, Asset, ReadConsumption, allow
 
 # Settings
-p, Demo, Setting, Read
 
 # Car catalog
-p, Demo, CarCatalog, List
-p, Demo, CarCatalog, Read
+p, Demo, CarCatalog, List, allow
+p, Demo, CarCatalog, Read, allow
 
 # Cars (read-only)
-p, Demo, Car, List
-p, Demo, Car, Read
 
 # Companies
-p, Demo, Company, List
-p, Demo, Company, Read
 
 # Sites and areas
-p, Demo, Site, List
-p, Demo, Site, Read
-p, Demo, SiteArea, List
-p, Demo, SiteArea, Read
+p, Demo, Site, List, allow
+p, Demo, Site, Read, allow
+p, Demo, SiteArea, List, allow
+p, Demo, SiteArea, Read, allow
 
 # Charging stations (read-only)
-p, Demo, ChargingStation, List
-p, Demo, ChargingStation, Read
-p, Demo, ChargingStation, GetConnectorQrCode
-p, Demo, ChargingStation, PushTransactionCdr
+p, Demo, ChargingStation, List, allow
+p, Demo, ChargingStation, Read, allow
+p, Demo, ChargingStation, GetConnectorQrCode, allow
+p, Demo, ChargingStation, PushTransactionCdr, allow
 
 # Statistics
-p, Demo, Statistic, Read
-p, Demo, Statistic, Export
-p, Demo, Statistics, Read
-p, Demo, Statistics, Export
+p, Demo, Statistic, Read, allow
+p, Demo, Statistic, Export, allow
+p, Demo, Statistics, Read, allow
+p, Demo, Statistics, Export, allow
 
 # Transactions (read-only)
-p, Demo, Transaction, List
-p, Demo, Transaction, Read
-p, Demo, Transaction, GetChargingStationTransactions
-p, Demo, Transaction, GetActiveTransaction
-p, Demo, Transaction, GetCompletedTransaction
-p, Demo, Transaction, GetRefundReport
+p, Demo, Transaction, List, allow
+p, Demo, Transaction, Read, allow
+p, Demo, Transaction, GetChargingStationTransactions, allow
+p, Demo, Transaction, GetActiveTransaction, allow
+p, Demo, Transaction, GetCompletedTransaction, allow
+p, Demo, Transaction, GetRefundReport, allow
 
 # Notifications
-p, Demo, Notification, Read
-p, Demo, Notification, Create
-p, Demo, Notification, Delete
+
+# ============================================================================
+# CRUD-matrix reconciliation (RbacMatrixSpec / AuthorizationsDefinition.ts)
+# Allow rows below close gaps against the TypeScript authorization matrix;
+# deny rows override grants leaking through role inheritance or wildcards.
+# ============================================================================
+
+p, Basic, Connector, List, allow
+p, Basic, Connector, Read, allow
+p, Demo, Connector, List, allow
+p, Demo, Connector, Read, allow
+p, Demo, Statistic, List, allow
+p, SiteAdmin, BillingAccount, List, allow
+p, SiteAdmin, BillingAccount, Read, allow
+p, SiteAdmin, CarCatalog, Create, allow
+p, SiteAdmin, CarCatalog, Delete, allow
+p, SiteAdmin, ChargingStation, Create, allow
+p, SiteAdmin, ChargingStationTemplate, List, allow
+p, SiteAdmin, ChargingStationTemplate, Read, allow
+p, SiteAdmin, Connector, Create, allow
+p, SiteAdmin, Connector, Delete, allow
+p, SiteAdmin, Invoice, Create, allow
+p, SiteAdmin, Invoice, Delete, allow
+p, SiteAdmin, Logging, Create, allow
+p, SiteAdmin, Logging, Delete, allow
+p, SiteAdmin, Notification, Create, allow
+p, SiteAdmin, Notification, Delete, allow
+p, SiteAdmin, Notification, List, allow
+p, SiteAdmin, Notification, Read, allow
+p, SiteAdmin, Report, Create, allow
+p, SiteAdmin, Report, Delete, allow
+p, SiteAdmin, Report, List, allow
+p, SiteAdmin, Report, Read, allow
+p, SiteAdmin, Setting, List, allow
+p, SiteAdmin, Setting, Read, allow
+p, SiteAdmin, Site, Create, allow
+p, SiteAdmin, Site, Delete, allow
+p, SiteAdmin, Statistic, Create, allow
+p, SiteAdmin, Statistic, Delete, allow
+p, SiteAdmin, Statistic, List, allow
+p, SiteAdmin, Tag, Create, allow
+p, SiteAdmin, Tag, Delete, allow
+p, SiteAdmin, Transaction, Create, allow
+p, SiteAdmin, Transaction, Delete, allow
+p, SiteOwner, Asset, List, allow
+p, SiteOwner, Asset, Read, allow
+p, SiteOwner, BillingAccount, List, allow
+p, SiteOwner, BillingAccount, Read, allow
+p, SiteOwner, ChargingProfile, List, allow
+p, SiteOwner, ChargingProfile, Read, allow
+p, SiteOwner, ChargingStationTemplate, List, allow
+p, SiteOwner, ChargingStationTemplate, Read, allow
+p, SiteOwner, Company, List, allow
+p, SiteOwner, Company, Read, allow
+p, SiteOwner, Logging, List, allow
+p, SiteOwner, Logging, Read, allow
+p, SiteOwner, Notification, List, allow
+p, SiteOwner, Notification, Read, allow
+p, SiteOwner, Report, List, allow
+p, SiteOwner, Report, Read, allow
+p, SiteOwner, Statistic, List, allow
+
+p, Admin, Tenant, Create, deny
+p, Admin, Tenant, Delete, deny
+p, Admin, Tenant, List, deny
+p, Admin, Tenant, Read, deny
+p, SiteAdmin, PaymentMethod, Create, deny
+p, SiteAdmin, PaymentMethod, Delete, deny
+p, SiteAdmin, PaymentMethod, List, deny
+p, SiteAdmin, PaymentMethod, Read, deny
+p, SiteOwner, Car, Create, deny
+p, SiteOwner, Car, Delete, deny
+p, SiteOwner, PaymentMethod, Create, deny
+p, SiteOwner, PaymentMethod, Delete, deny
+p, SiteOwner, PaymentMethod, List, deny
+p, SiteOwner, PaymentMethod, Read, deny

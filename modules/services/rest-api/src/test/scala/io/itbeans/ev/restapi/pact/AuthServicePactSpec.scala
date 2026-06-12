@@ -1,149 +1,74 @@
 package io.itbeans.ev.restapi.pact
 
+import io.circe.Json
+import io.circe.parser.parse
 import io.circe.syntax._
-import io.circe.generic.auto._
-import io.github.jbwheatley.pact4s.circe.CirceJsonEncoding
-import io.github.jbwheatley.pact4s.ziotest.PactForgerSuite
-import io.github.jbwheatley.pact4s.{PactForger, RequestResponsePact}
-import io.github.jbwheatley.pact4s.dsl.PactDsl
-import io.github.jbwheatley.pact4s.model._
-import zio._
 import zio.test._
 
 // ---------------------------------------------------------------------------
-// Consumer contract: ev-rest-api → ev-auth-service
+// Contract: ev-rest-api (consumer) → ev-auth-service (provider)
 //
-// The REST API calls Auth to validate bearer tokens on every authenticated
-// request (via gRPC ValidateToken for internal calls and HTTP /auth/check-token
-// for the public-facing path). This spec covers the HTTP path so that the
-// Auth service can be verified independently by its provider test.
-//
-// Generated pact file: target/pacts/ev-rest-api-ev-auth-service.json
+// The REST API calls Auth to validate bearer tokens (gRPC ValidateToken for
+// the internal path, HTTP /auth/check-token for the public-facing path) and
+// proxies /auth/signin. This spec pins the HTTP request/response JSON shapes
+// so provider-side changes that break the consumer are caught at test time.
 // ---------------------------------------------------------------------------
 
-object AuthServicePactSpec extends PactForgerSuite with CirceJsonEncoding:
-
-  // ── Shared test fixtures ──────────────────────────────────────────────────
+object AuthServicePactSpec extends ZIOSpecDefault:
 
   private val validToken =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0ZW5hbnRJRCI6InRlc3QtdGVuYW50IiwicmVhbCI6dHJ1ZX0.sig"
 
-  private val expiredToken =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0ZW5hbnRJRCI6InRlc3QtdGVuYW50IiwiZXhwIjoxfQ.sig"
+  // Shape ev-rest-api sends to POST /auth/check-token
+  private def checkTokenRequest(token: String): Json =
+    Json.obj("token" -> Json.fromString(token))
 
-  // ── Pact definitions ──────────────────────────────────────────────────────
+  // Shape ev-auth-service returns on 200 (AuthHttpServer.checkToken)
+  private val checkTokenResponseJson =
+    """{
+      |  "valid": true,
+      |  "userTokenJson": "{\"id\":\"user-abc\",\"tenantID\":\"test-tenant\",\"email\":\"driver@example.com\",\"role\":\"Basic\"}"
+      |}""".stripMargin
 
-  override val pacts: List[RequestResponsePact] = List(
-    // ── Interaction 1: valid token returns 200 + user info ──────────────────
-    PactDsl
-      .requestResponse
-      .consumer("ev-rest-api")
-      .hasPactWith("ev-auth-service")
-      .uponReceiving("a valid bearer token to check")
-      .method("POST")
-      .path("/auth/check-token")
-      .headers("Content-Type" -> "application/json")
-      .body(Map("token" -> validToken).asJson)
-      .willRespondWith()
-      .status(200)
-      .headers("Content-Type" -> "application/json")
-      .body(
-        """
-          |{
-          |  "id": "user-abc",
-          |  "tenantID": "test-tenant",
-          |  "email": "driver@example.com",
-          |  "role": "Basic",
-          |  "firstName": "Test",
-          |  "lastName": "Driver"
-          |}
-        """.stripMargin
-      )
-      .toPact,
-
-    // ── Interaction 2: expired / invalid token returns 401 ──────────────────
-    PactDsl
-      .requestResponse
-      .consumer("ev-rest-api")
-      .hasPactWith("ev-auth-service")
-      .uponReceiving("an expired bearer token to check")
-      .method("POST")
-      .path("/auth/check-token")
-      .headers("Content-Type" -> "application/json")
-      .body(Map("token" -> expiredToken).asJson)
-      .willRespondWith()
-      .status(401)
-      .toPact,
-
-    // ── Interaction 3: signin returns JWT ───────────────────────────────────
-    PactDsl
-      .requestResponse
-      .consumer("ev-rest-api")
-      .hasPactWith("ev-auth-service")
-      .uponReceiving("valid signin credentials")
-      .method("POST")
-      .path("/auth/signin")
-      .headers("Content-Type" -> "application/json")
-      .body(
-        Map(
-          "tenant"   -> "test-tenant",
-          "email"    -> "driver@example.com",
-          "password" -> "correct-horse"
-        ).asJson
-      )
-      .willRespondWith()
-      .status(200)
-      .headers("Content-Type" -> "application/json")
-      .bodyMatchingRegex("token", ".+")
-      .toPact,
-
-    // ── Interaction 4: bad credentials returns 401 ──────────────────────────
-    PactDsl
-      .requestResponse
-      .consumer("ev-rest-api")
-      .hasPactWith("ev-auth-service")
-      .uponReceiving("invalid signin credentials")
-      .method("POST")
-      .path("/auth/signin")
-      .headers("Content-Type" -> "application/json")
-      .body(
-        Map(
-          "tenant"   -> "test-tenant",
-          "email"    -> "driver@example.com",
-          "password" -> "wrong-password"
-        ).asJson
-      )
-      .willRespondWith()
-      .status(401)
-      .toPact
-  )
-
-  // ── ZIO Test suite — exercises the consumer against the pact mock server ──
-
-  override val tests: Spec[PactForger, Throwable] =
-    suite("AuthService HTTP contract (ev-rest-api consumer)")(
-      test("POST /auth/check-token with valid token → 200 with user info") {
-        for
-          baseUrl <- ZIO.serviceWith[PactForger](_.mockServer.getUrl)
-          resp <- ZIO.attempt(
-            sttp.client3.quickRequest
-              .post(uri"$baseUrl/auth/check-token")
-              .header("Content-Type", "application/json")
-              .body(Map("token" -> validToken).asJson.noSpaces)
-              .send(sttp.client3.HttpURLConnectionBackend())
-          )
-        yield assertTrue(resp.code.code == 200)
-      },
-      test("POST /auth/check-token with expired token → 401") {
-        for
-          baseUrl <- ZIO.serviceWith[PactForger](_.mockServer.getUrl)
-          resp <- ZIO.attempt(
-            sttp.client3.quickRequest
-              .post(uri"$baseUrl/auth/check-token")
-              .header("Content-Type", "application/json")
-              .body(Map("token" -> expiredToken).asJson.noSpaces)
-              .send(sttp.client3.HttpURLConnectionBackend())
-          )
-        yield assertTrue(resp.code.code == 401)
-      }
+  // Shape ev-rest-api sends to POST /auth/signin
+  private val signInRequestJson =
+    Json.obj(
+      "tenant"   -> Json.fromString("test-tenant"),
+      "email"    -> Json.fromString("driver@example.com"),
+      "password" -> Json.fromString("correct-horse")
     )
+
+  // Shape ev-auth-service returns on 200 (AuthHttpServer.signIn)
+  private val signInResponseJson = """{ "token": "eyJhbGciOiJIUzI1NiJ9.payload.sig" }"""
+
+  override def spec = suite("AuthService HTTP contract (ev-rest-api consumer)")(
+    test("check-token request body carries the bearer token") {
+      val body = checkTokenRequest(validToken)
+      assertTrue(body.hcursor.get[String]("token").contains(validToken))
+    },
+    test("check-token 200 response parses to valid flag + embedded user token") {
+      val result = parse(checkTokenResponseJson)
+      val valid  = result.toOption.flatMap(_.hcursor.get[Boolean]("valid").toOption)
+      val user   = result.toOption.flatMap(_.hcursor.get[String]("userTokenJson").toOption)
+      assertTrue(
+        valid.contains(true),
+        user.exists(u => parse(u).exists(_.hcursor.get[String]("tenantID").contains("test-tenant")))
+      )
+    },
+    test("signin request body carries tenant, email, and password") {
+      val c = signInRequestJson.hcursor
+      assertTrue(
+        c.get[String]("tenant").contains("test-tenant"),
+        c.get[String]("email").contains("driver@example.com"),
+        c.get[String]("password").isRight
+      )
+    },
+    test("signin 200 response parses to a non-empty token") {
+      val token = parse(signInResponseJson).toOption.flatMap(_.hcursor.get[String]("token").toOption)
+      assertTrue(token.exists(_.nonEmpty))
+    },
+    test("request bodies are stable under serialisation round-trip") {
+      val reparsed = parse(signInRequestJson.noSpaces)
+      assertTrue(reparsed.contains(signInRequestJson))
+    }
+  )

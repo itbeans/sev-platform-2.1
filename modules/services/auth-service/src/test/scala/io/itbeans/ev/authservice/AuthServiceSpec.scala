@@ -271,7 +271,7 @@ object AuthServiceSpec extends ZIOSpecDefault:
         val tenantRepo = new MemTenantRepository(List(testTenant))
         val svc =
           new TokenService(testConfig, userRepo, new MemTagRepository(), new MemUserSiteRepository(), tenantRepo)
-        AuthHttpServer.routes(userRepo, tenantRepo, svc, testConfig) // ensures it compiles
+        AuthHttpServer.routes(userRepo, tenantRepo, svc, None, testConfig) // ensures it compiles
         for
           token <- svc.issueToken(tenantId, user, testTenant)
         yield assertTrue(token.nonEmpty)

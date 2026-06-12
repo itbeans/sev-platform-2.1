@@ -1,171 +1,120 @@
 package io.itbeans.ev.billingservice.pact
 
-import io.circe.syntax._
-import io.circe.generic.auto._
-import io.github.jbwheatley.pact4s.circe.CirceJsonEncoding
-import io.github.jbwheatley.pact4s.ziotest.MessagePactForgerSuite
-import io.github.jbwheatley.pact4s.{MessagePact, MessagePactForger}
-import io.github.jbwheatley.pact4s.dsl.MessagePactDsl
-import zio._
+import io.circe.parser.decode
+import io.itbeans.ev.billingservice.TransactionLifecycleBillingPayload
 import zio.test._
 
 // ---------------------------------------------------------------------------
-// Message Pact: ev-billing-service (consumer) ← ev-ocpp-processor (provider)
+// Contract: ev-billing-service (consumer) ← ev-ocpp-processor (provider)
 //
-// The billing service subscribes to transactions.lifecycle.  When the OCPP
+// The billing service subscribes to transactions.lifecycle. When the OCPP
 // processor publishes a "Stop" event the billing service creates a Stripe
-// draft invoice.  This spec pins the Kafka message schema so that the
-// processor's MessagePactVerifySpec can validate every published payload
-// against these expectations before production cutover.
-//
-// Generated pact file: target/pacts/ev-billing-service-ev-ocpp-processor.json
+// draft invoice. This spec pins the exact JSON shapes the processor emits
+// (see OcppEventProcessor.publishTransactionLifecycle / -Ended) and proves
+// the billing decoder accepts them — the contract test that would have
+// caught the original publisher/consumer schema mismatch.
 // ---------------------------------------------------------------------------
 
-object TransactionLifecyclePactSpec extends MessagePactForgerSuite with CirceJsonEncoding:
+object TransactionLifecyclePactSpec extends ZIOSpecDefault:
 
-  // ── Interactions ──────────────────────────────────────────────────────────
+  // Verbatim shape of OcppEventProcessor.publishTransactionLifecycleEnded
+  // (OCPP 1.6 numeric transactionId, priced session).
+  private val stopEventJson =
+    """{
+      |  "tenantId":          "tenant-abc",
+      |  "chargingStationId": "CS-001",
+      |  "transactionId":     12345,
+      |  "action":            "Stop",
+      |  "connectorId":       1,
+      |  "stopReason":        "Remote",
+      |  "meterValue":        22500.0,
+      |  "timestamp":         1717239000000,
+      |  "userId":            "user-xyz",
+      |  "meterStart":        0.0,
+      |  "meterStop":         22500.0,
+      |  "startDate":         "2024-06-01T10:00:00Z",
+      |  "endDate":           "2024-06-01T11:30:00Z",
+      |  "totalDurationSecs": 5400,
+      |  "consumptionWh":     22500.0,
+      |  "priceUnit":         "eur",
+      |  "totalCost":         6.75,
+      |  "invoiceItemJson":   "[{\"type\":\"ENERGY\",\"unitPrice\":0.30,\"quantity\":22.5,\"amountCents\":675,\"description\":\"22.5 kWh @ 0.30/kWh\"}]"
+      |}""".stripMargin
 
-  override val pacts: List[MessagePact] = List(
-    // ── Interaction 1: tx stopped with ENERGY dimension ─────────────────────
-    MessagePactDsl
-      .consumer("ev-billing-service")
-      .hasPactWith("ev-ocpp-processor")
-      .expectsToReceive("a transaction Stop event with energy billing")
-      .withMetadata(Map("contentType" -> "application/json"))
-      .withContent(
-        """{
-          |  "action":            "Stop",
-          |  "tenantId":          "tenant-abc",
-          |  "transactionId":     12345,
-          |  "chargingStationId": "CS-001",
-          |  "userId":            "user-xyz",
-          |  "pricingId":         "pricing-123",
-          |  "startDate":         "2024-06-01T10:00:00Z",
-          |  "endDate":           "2024-06-01T11:30:00Z",
-          |  "consumptionKwh":    22.5,
-          |  "durationSecs":      5400,
-          |  "dimensions": [
-          |    {
-          |      "type":       "ENERGY",
-          |      "unitPrice":  0.30,
-          |      "quantity":   22.5,
-          |      "amountCents": 675,
-          |      "description": "22.5 kWh @ £0.30/kWh"
-          |    }
-          |  ]
-          |}""".stripMargin
+  // Stop event without pricing (priceUnit/totalCost/invoiceItemJson null).
+  private val unpricedStopEventJson =
+    """{
+      |  "tenantId":          "tenant-abc",
+      |  "chargingStationId": "CS-002",
+      |  "transactionId":     12346,
+      |  "action":            "Stop",
+      |  "connectorId":       2,
+      |  "stopReason":        "EVDisconnected",
+      |  "meterValue":        7200.0,
+      |  "timestamp":         1717245600000,
+      |  "userId":            null,
+      |  "meterStart":        0.0,
+      |  "meterStop":         7200.0,
+      |  "startDate":         "2024-06-01T12:00:00Z",
+      |  "endDate":           "2024-06-01T13:00:00Z",
+      |  "totalDurationSecs": 3600,
+      |  "consumptionWh":     7200.0,
+      |  "priceUnit":         null,
+      |  "totalCost":         null,
+      |  "invoiceItemJson":   null
+      |}""".stripMargin
+
+  // Verbatim shape of OcppEventProcessor.publishTransactionLifecycle (Start).
+  private val startEventJson =
+    """{
+      |  "tenantId":          "tenant-abc",
+      |  "chargingStationId": "CS-001",
+      |  "transactionId":     12347,
+      |  "action":            "Start",
+      |  "connectorId":       1,
+      |  "userId":            "user-xyz",
+      |  "meterValue":        0.0,
+      |  "meterStart":        0.0,
+      |  "timestamp":         1717250400000
+      |}""".stripMargin
+
+  // OCPP 2.x stations may use numeric-string transaction ids; the processor
+  // publishes them as JSON strings and the billing decoder must coerce.
+  private val numericStringIdJson =
+    stopEventJson.replace(""""transactionId":     12345""", """"transactionId":     "12345"""")
+
+  override def spec = suite("transactions.lifecycle contract (ev-billing-service consumer)")(
+    test("Stop event with pricing decodes into the billing payload") {
+      val result = decode[TransactionLifecycleBillingPayload](stopEventJson)
+      assertTrue(
+        result.isRight,
+        result.toOption.exists(_.action == "Stop"),
+        result.toOption.exists(_.transactionId == 12345L),
+        result.toOption.exists(_.userId.contains("user-xyz")),
+        result.toOption.exists(_.totalCost.contains(6.75)),
+        result.toOption.exists(_.invoiceItemJson.exists(_.contains("ENERGY")))
       )
-      .toPact,
-
-    // ── Interaction 2: tx stopped — time + energy dimensions ────────────────
-    MessagePactDsl
-      .consumer("ev-billing-service")
-      .hasPactWith("ev-ocpp-processor")
-      .expectsToReceive("a transaction Stop event with time and energy billing")
-      .withMetadata(Map("contentType" -> "application/json"))
-      .withContent(
-        """{
-          |  "action":            "Stop",
-          |  "tenantId":          "tenant-abc",
-          |  "transactionId":     12346,
-          |  "chargingStationId": "CS-002",
-          |  "userId":            "user-xyz",
-          |  "pricingId":         "pricing-456",
-          |  "startDate":         "2024-06-01T12:00:00Z",
-          |  "endDate":           "2024-06-01T13:00:00Z",
-          |  "consumptionKwh":    7.2,
-          |  "durationSecs":      3600,
-          |  "dimensions": [
-          |    {
-          |      "type":        "CHARGING_TIME",
-          |      "unitPrice":   5.00,
-          |      "quantity":    1.0,
-          |      "amountCents": 500,
-          |      "description": "1 hour session fee"
-          |    },
-          |    {
-          |      "type":        "ENERGY",
-          |      "unitPrice":   0.25,
-          |      "quantity":    7.2,
-          |      "amountCents": 180,
-          |      "description": "7.2 kWh @ £0.25/kWh"
-          |    }
-          |  ]
-          |}""".stripMargin
+    },
+    test("Stop event without pricing decodes (nullable price fields)") {
+      val result = decode[TransactionLifecycleBillingPayload](unpricedStopEventJson)
+      assertTrue(
+        result.isRight,
+        result.toOption.exists(_.userId.isEmpty),
+        result.toOption.exists(_.totalCost.isEmpty)
       )
-      .toPact,
-
-    // ── Interaction 3: Start event — billing service must ignore it ──────────
-    // Billing only acts on Stop.  This interaction documents that the Start
-    // message shape is valid so the billing service won't crash on receipt.
-    MessagePactDsl
-      .consumer("ev-billing-service")
-      .hasPactWith("ev-ocpp-processor")
-      .expectsToReceive("a transaction Start event (billing ignores this)")
-      .withMetadata(Map("contentType" -> "application/json"))
-      .withContent(
-        """{
-          |  "action":            "Start",
-          |  "tenantId":          "tenant-abc",
-          |  "transactionId":     12347,
-          |  "chargingStationId": "CS-001",
-          |  "userId":            "user-xyz",
-          |  "pricingId":         "pricing-123",
-          |  "startDate":         "2024-06-01T14:00:00Z",
-          |  "endDate":           null,
-          |  "consumptionKwh":    0.0,
-          |  "durationSecs":      0,
-          |  "dimensions":        []
-          |}""".stripMargin
+    },
+    test("Start event decodes (billing ignores the action downstream)") {
+      val result = decode[TransactionLifecycleBillingPayload](startEventJson)
+      assertTrue(
+        result.isRight,
+        result.toOption.exists(_.action == "Start")
       )
-      .toPact
+    },
+    test("numeric-string transactionId (OCPP 2.x) is coerced to Long") {
+      val result = decode[TransactionLifecycleBillingPayload](numericStringIdJson)
+      assertTrue(
+        result.isRight,
+        result.toOption.exists(_.transactionId == 12345L)
+      )
+    }
   )
-
-  // ── ZIO Test suite — deserialise each message and verify business rules ───
-
-  override val tests: Spec[MessagePactForger, Throwable] =
-    suite("transactions.lifecycle message contract (ev-billing-service consumer)")(
-      test("Stop event with ENERGY dimension is deserializable") {
-        for
-          msg <- ZIO.serviceWith[MessagePactForger](
-            _.getMessage("a transaction Stop event with energy billing")
-          )
-          parsed <- ZIO.fromEither(io.circe.parser.decode[BillingPayloadPreview](msg.body))
-        yield assertTrue(
-          parsed.action == "Stop",
-          parsed.consumptionKwh > 0,
-          parsed.dimensions.nonEmpty,
-          parsed.userId.nonEmpty
-        )
-      },
-      test("Stop event with time + energy dimensions is deserializable") {
-        for
-          msg <- ZIO.serviceWith[MessagePactForger](
-            _.getMessage("a transaction Stop event with time and energy billing")
-          )
-          parsed <- ZIO.fromEither(io.circe.parser.decode[BillingPayloadPreview](msg.body))
-        yield assertTrue(
-          parsed.action == "Stop",
-          parsed.dimensions.size == 2
-        )
-      },
-      test("Start event is deserializable (billing ignores action)") {
-        for
-          msg <- ZIO.serviceWith[MessagePactForger](
-            _.getMessage("a transaction Start event (billing ignores this)")
-          )
-          parsed <- ZIO.fromEither(io.circe.parser.decode[BillingPayloadPreview](msg.body))
-        yield assertTrue(parsed.action == "Start")
-      }
-    )
-
-// Minimal projection of the Kafka payload — used only to verify deserialization
-private case class DimensionPreview(`type`: String, amountCents: Int)
-
-private case class BillingPayloadPreview(
-    action: String,
-    transactionId: Long,
-    userId: String,
-    consumptionKwh: Double,
-    dimensions: List[DimensionPreview]
-)

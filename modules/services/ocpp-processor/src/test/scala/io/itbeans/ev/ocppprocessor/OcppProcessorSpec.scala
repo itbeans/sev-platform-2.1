@@ -4,6 +4,11 @@ import io.circe.Encoder
 import io.itbeans.ev.auth.grpc.auth_service.OcppAuthorizationResponse
 import io.itbeans.ev.domain._
 import io.itbeans.ev.ocpp.grpc.ocpp_gateway.{SendCommandResponse, SendResponseAck}
+import io.itbeans.ev.pricing.grpc.pricing_service.{
+  FinalisePriceResponse,
+  PriceConsumptionResponse,
+  ResolvePricingResponse
+}
 import org.bson.Document
 import zio._
 import zio.test._
@@ -110,6 +115,44 @@ object OcppProcessorSpec extends ZIOSpecDefault:
     ): Task[SendResponseAck] =
       ZIO.succeed(SendResponseAck(delivered = true))
 
+  object NoOpPricingClient extends ProcessorPricingClient:
+
+    def resolvePricing(
+        tenantId: String,
+        stationId: String,
+        connectorId: String,
+        connectorType: String,
+        connectorPowerKw: Double,
+        userId: String,
+        startTimestampMs: Long
+    ): Task[ResolvePricingResponse] =
+      ZIO.succeed(ResolvePricingResponse())
+
+    def priceConsumption(
+        tenantId: String,
+        txId: String,
+        pricingModelJson: String,
+        consumptionWh: Double,
+        instantWatts: Double,
+        connectorType: String,
+        connectorPowerKw: Double,
+        intervalStartMs: Long,
+        intervalEndMs: Long
+    ): Task[PriceConsumptionResponse] =
+      ZIO.succeed(PriceConsumptionResponse())
+
+    def finalisePrice(
+        tenantId: String,
+        txId: String,
+        pricingModelJson: String,
+        totalConsumptionWh: Double,
+        connectorType: String,
+        connectorPowerKw: Double,
+        startTimestampMs: Long,
+        endTimestampMs: Long
+    ): Task[FinalisePriceResponse] =
+      ZIO.succeed(FinalisePriceResponse())
+
   // ── Fixtures ──────────────────────────────────────────────────────────────
 
   val t1       = TenantId("t1")
@@ -123,7 +166,7 @@ object OcppProcessorSpec extends ZIOSpecDefault:
     )
 
   def makeProcessor(repo: InMemoryProcessorRepository, prod: InMemoryKafkaProducer): OcppEventProcessor =
-    new OcppEventProcessor(repo, prod, kafkaConfig, NoOpAuthClient, NoOpGatewayClient)
+    new OcppEventProcessor(repo, prod, kafkaConfig, NoOpAuthClient, NoOpGatewayClient, NoOpPricingClient)
 
   // ── Tests ─────────────────────────────────────────────────────────────────
 
