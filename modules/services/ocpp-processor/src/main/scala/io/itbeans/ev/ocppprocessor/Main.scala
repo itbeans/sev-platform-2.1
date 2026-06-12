@@ -1,7 +1,6 @@
 package io.itbeans.ev.ocppprocessor
 
 import io.itbeans.ev.kafka.{KafkaConfig, LiveEvKafkaProducer}
-import io.itbeans.ev.otel.{EvTracing, OtelConfig, OtelLayer}
 import org.mongodb.scala.MongoClient
 import zio._
 import zio.config.typesafe.TypesafeConfigProvider
@@ -52,9 +51,6 @@ object Main extends ZIOAppDefault:
       // Config
       ZLayer.fromZIO(ZIO.config[KafkaConfig]),
       ZLayer.fromZIO(ZIO.config[ProcessorConfig]),
-      ZLayer.fromZIO(ZIO.config[OtelConfig]),
-      OtelLayer.live,
-      EvTracing.live,
       // MongoDB
       mongoDatabaseLayer,
       // Repository
