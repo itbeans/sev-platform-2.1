@@ -217,7 +217,7 @@ final class BillingGrpcTransport(
               for
                 stripeJson <- stripe.retrieveAccount(stripeAccountId)
                 chargesEnabled = stripeJson.hcursor.downField("charges_enabled").as[Boolean].getOrElse(false)
-                (newStatus, newLink) <-
+                statusAndLink <-
                   if chargesEnabled then
                     accountRepo.update(account.copy(status = BillingAccountStatus.Active, activationLink = None))
                       .as((BillingAccountStatus.Active, None: Option[String]))
@@ -228,6 +228,7 @@ final class BillingGrpcTransport(
                       _ <-
                         accountRepo.update(account.copy(status = BillingAccountStatus.Pending, activationLink = link))
                     yield (BillingAccountStatus.Pending, link)
+                (newStatus, newLink) = statusAndLink
               yield ActivateBillingAccountResponse(
                 success = true,
                 status = newStatus.code,
