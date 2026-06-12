@@ -200,12 +200,24 @@ object OcppProcessorSpec extends ZIOSpecDefault:
         val repo = new InMemoryProcessorRepository
         val prod = new InMemoryKafkaProducer
         val proc = makeProcessor(repo, prod)
+        // Trigger is published only for stations assigned to a site area
+        repo.stations = List(new Document("_id", stationA.value).append("siteAreaId", "sa-001"))
         val json = """{"action":"StatusNotification","payload":{"connectorId":1,"connectorStatus":"Occupied"}}"""
         for
           _ <- proc.processRecord(stationA.value, json, s"ocpp.events.${t1.value}")
         yield assertTrue(repo.statusUpdates.nonEmpty) &&
           assertTrue(repo.statusUpdates.head._3 == "Occupied") &&
           assertTrue(prod.published.exists(_._1 == io.itbeans.ev.kafka.Topics.smartChargingTriggers))
+      },
+      test("StatusNotification skips smart-charging trigger when station has no site area") {
+        val repo = new InMemoryProcessorRepository
+        val prod = new InMemoryKafkaProducer
+        val proc = makeProcessor(repo, prod)
+        val json = """{"action":"StatusNotification","payload":{"connectorId":1,"connectorStatus":"Occupied"}}"""
+        for
+          _ <- proc.processRecord(stationA.value, json, s"ocpp.events.${t1.value}")
+        yield assertTrue(repo.statusUpdates.nonEmpty) &&
+          assertTrue(!prod.published.exists(_._1 == io.itbeans.ev.kafka.Topics.smartChargingTriggers))
       },
       test("StartTransaction creates transaction document and publishes lifecycle event") {
         val repo = new InMemoryProcessorRepository
