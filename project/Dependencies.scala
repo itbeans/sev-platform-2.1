@@ -26,7 +26,7 @@ object Dependencies {
     val testContainers = "0.41.4"
     val scalaCheck     = "1.18.1"
     val pact           = "4.6.16"
-    val pact4s         = "0.9.1"
+    val pact4s         = "0.11.2"
   }
 
   // ── ZIO core ──────────────────────────────────────────────────────────────
