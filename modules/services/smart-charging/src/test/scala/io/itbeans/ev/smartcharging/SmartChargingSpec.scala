@@ -55,11 +55,13 @@ object SmartChargingSpec extends ZIOSpecDefault:
     def findProfiles(tenantId: String, siteAreaId: String): Task[List[ChargingProfile]] =
       ZIO.succeed(savedProfiles.filter(p => p.tenantId == tenantId && p.siteAreaId.contains(siteAreaId)))
 
-    def deleteProfilesForStation(tenantId: String, chargingStationId: String): Task[Unit] =
+    def deleteProfilesForStation(tenantId: String, chargingStationId: String): Task[Int] =
       ZIO.succeed {
+        val before = savedProfiles.size
         savedProfiles = savedProfiles.filterNot(p =>
           p.tenantId == tenantId && p.chargingStationId == chargingStationId
         )
+        before - savedProfiles.size
       }
 
     def findSiteArea(tenantId: String, siteAreaId: String): Task[Option[SiteAreaSC]] =

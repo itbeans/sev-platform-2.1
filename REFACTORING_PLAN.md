@@ -448,6 +448,42 @@ A full three-track audit (service implementations, infrastructure/deployment, cr
 - `StripeClient`: added `retrieveAccount(accountId)` to trait and `LiveStripeClient`.
 - `BillingServiceSpec`: added 4 integration tests covering the new gRPC endpoints (in-memory stubs, no Stripe network calls).
 
+### Build & Test Verification (2026-06-12, post-review)
+
+The post-review session also ran the first clean-environment `sbt compile` /
+`sbt test`, which surfaced that the project had never compiled outside a
+warm cache. All issues below are fixed; the suite now passes (289 tests,
+0 failures) and `scalafmtCheckAll` is clean. The only specs not runnable
+locally without Docker are TenantCollectionSpec and EvKafkaProducerSpec
+(testcontainers — they run in CI's service containers).
+
+**Phantom dependencies (build could never resolve):**
+- `io.opentelemetry.instrumentation:opentelemetry-zio-2.0:1.43.0-alpha` does
+  not exist on Maven Central — removed from every dependency list.
+- `pact4s 0.9.1` was never published (the zio-test module starts at 0.11.0)
+  and the pact specs were written against a fabricated
+  `io.github.jbwheatley.pact4s` API. Specs rewritten as plain contract
+  specs pinning the real Kafka/HTTP JSON shapes; pact4s removed.
+
+**Compile errors fixed (main):** Scala 3 `export` keyword import in
+OtelLayer; `DomainBsonCodecs.given` import missing plain helpers in 8
+mongo-zio repositories; `Tag` ambiguity (domain vs zio); zio-kafka
+`CommittableRecord.record.topic`; smartCharging/billingService missing
+grpcDeps + proto in build.sbt; missing `Metric`/proto imports; ZIO tuple
+destructure in for-comprehensions; unused-layer ZLayer errors in 7 service
+Mains; `UIO` vs failable promise in CrossPodCommandRelay; tapir endpoint
+list type annotations in AuthHttpServer; `.ignore` misuse in roaming.
+
+**RBAC policy reconciled (security-relevant):** `rbac_policy.csv` disagreed
+with the AuthorizationsDefinition.ts-derived matrix in 88 of 552 entries —
+including Admin having full Tenant CRUD and SiteAdmin/SiteOwner inheriting
+PaymentMethod access from Basic. Added eft/deny-override support to the
+Casbin model and reconciled the CSV (20 over-grants removed, 54 missing
+grants added, 14 deny overrides). RbacMatrixSpec passes 552/552.
+
+**Test data:** golden-transactions.json tx#1005 expectation was internally
+inconsistent (550c for 50 min x 0.1 GBP/min); corrected to 500c/1400c.
+
 ### TypeScript Monolith Decommission
 
 Prerequisites before decommissioning:
