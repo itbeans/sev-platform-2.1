@@ -1,6 +1,9 @@
 -- ev-analytics TimescaleDB schema
 -- Run with: sbt flywayMigrate (or apply manually against the TimescaleDB instance)
 
+CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 -- ── Consumption hypertable ────────────────────────────────────────────────
 -- One row per meter-value reading from ev-ocpp-processor.
 -- Partitioned by time for efficient range queries.
@@ -37,6 +40,12 @@ CREATE INDEX IF NOT EXISTS idx_ev_consumptions_tenant_tx
   WHERE transaction_id IS NOT NULL;
 
 -- Compression policy: compress chunks older than 30 days
+-- (compression must be enabled on the hypertable before a policy can be added)
+ALTER TABLE ev_consumptions SET (
+  timescaledb.compress,
+  timescaledb.compress_segmentby = 'tenant_id, charging_station_id'
+);
+
 SELECT add_compression_policy(
   'ev_consumptions',
   compress_after => INTERVAL '30 days',

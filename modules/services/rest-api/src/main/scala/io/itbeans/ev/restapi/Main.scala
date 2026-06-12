@@ -66,6 +66,7 @@ object Main extends ZIOAppDefault:
       // Authorization (in-process RBAC/ABAC)
       CasbinAuthorizationService.live,
       // gRPC clients
+      AuthGrpcClient.live,
       OcppGatewayGrpcClient.live,
       BillingGrpcClient.live,
       // REST server

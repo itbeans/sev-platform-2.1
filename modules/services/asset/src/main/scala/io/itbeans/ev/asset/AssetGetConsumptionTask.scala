@@ -24,7 +24,8 @@ import java.time.Instant
 //   5. Errors per asset are logged and do not stop processing other assets.
 //
 // Minimum dedup gap: 50 seconds between consecutive consumption records.
-// Smart charging integration: TODO (triggers ev-smart-charging via Kafka).
+// Smart charging integration: ev-smart-charging consumes asset.consumptions
+// and translates each event into a debounced "Reoptimize" trigger.
 // ---------------------------------------------------------------------------
 
 final class AssetGetConsumptionTask(
@@ -120,6 +121,7 @@ final class AssetGetConsumptionTask(
       assetName = asset.name,
       siteAreaId = asset.siteAreaId,
       assetType = asset.assetType,
+      powerWatts = m.instantWatts,
       measurement = m
     )
     for

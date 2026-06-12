@@ -10,9 +10,9 @@ spec:
   project: ev-platform
 
   source:
-    repoURL: https://github.com/itbeans/ev-server
+    repoURL: https://github.com/itbeans/sev-platform-2.1
     targetRevision: main
-    path: scala-services/helm/charts/ev-scheduler
+    path: helm/charts/ev-scheduler
     helm:
       valueFiles:
         - ../../../argocd/values/staging.yaml

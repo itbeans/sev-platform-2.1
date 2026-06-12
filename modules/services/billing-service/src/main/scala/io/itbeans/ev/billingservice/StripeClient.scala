@@ -58,6 +58,7 @@ trait StripeClient:
   // ── Connected accounts ───────────────────────────────────────────────────
   def createConnectedAccount(email: String, companyName: String): Task[Json]
   def createAccountLink(accountId: String, refreshUrl: String, returnUrl: String): Task[Json]
+  def retrieveAccount(accountId: String): Task[Json]
 
   // ── Transfers ────────────────────────────────────────────────────────────
   def createTransfer(
@@ -214,6 +215,9 @@ final class LiveStripeClient(cfg: BillingConfig) extends StripeClient:
         "type"        -> "account_onboarding"
       )
     )
+
+  def retrieveAccount(accountId: String): Task[Json] =
+    get(s"/accounts/$accountId")
 
   // ── Transfers ─────────────────────────────────────────────────────────────
 

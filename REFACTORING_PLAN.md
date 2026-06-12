@@ -1,8 +1,8 @@
 # ev-server Scala Microservices Refactoring — Living Progress Plan
 
-> **Last updated:** 2026-05-10  
+> **Last updated:** 2026-06-12  
 > **Branch:** `claude/codebase-review-summary-hgNgO`  
-> **Overall progress: 100% — all planned implementation complete**
+> **Overall progress: 100% — all planned implementation complete; post-review integration fixes applied**
 
 Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 
@@ -399,6 +399,54 @@ MONGO_URI=mongodb://... PG_URI=postgresql://... \
 
 All scripts are idempotent (`ON CONFLICT DO UPDATE`/`DO NOTHING`) and support
 `--tenant TENANT_ID` for per-tenant validation before full runs.
+
+---
+
+## Post-Review Integration Fixes (2026-06-12)
+
+A full three-track audit (service implementations, infrastructure/deployment, cross-service integration) found runtime blockers, a security gap, and unimplemented billing endpoints. All fixed in this session.
+
+### Kafka contract mismatches (runtime blockers)
+
+| Topic | Bug | Fix |
+|---|---|---|
+| `transactions.lifecycle` | `transactionId` published as String; billing + roaming decoded as Long. Missing `connectorId`, `stopReason`, `userId`, `meterStart` | Publisher now emits numeric JSON for OCPP 1.6 IDs. Added all missing fields. Custom `Decoder[Long]` accepts number or numeric string on consumers. |
+| `smart-charging.triggers` | Publisher emitted `{tenantId, stationId, timestamp}`; consumer required `{tenantId, siteAreaId, event, chargingStationId, connectorId}` | Rewritten to look up station's `siteAreaId` from MongoDB; skips publish if station has no site area. |
+| `asset.consumptions` | Missing `powerWatts` flat field (flat copy of `measurement.instantWatts`) | Added to `AssetConsumptionEvent`; populated in `recordMeasurement`. |
+
+### PostgreSQL schema (runtime blockers)
+
+- `docker/init/postgres-init.sql` rewrote to canonical schema matching `V1__analytics_schema.sql` and `V1__billing_schema.sql` (correct table names, `time` column for TimescaleDB hypertables, billing tables included).
+- `scripts/migrate-consumptions.sh` and `scripts/migrate-logs.sh` rewritten to match canonical schema; added `copy_upsert()` helper (PostgreSQL COPY does not support ON CONFLICT).
+- `scripts/migrate-billing.sh` — replaced direct COPY blocks with `copy_upsert()` pattern throughout.
+- `V1__analytics_schema.sql` — added compression enablement before `add_compression_policy` (TimescaleDB requirement).
+
+### ArgoCD deployment (deployment blockers)
+
+- All 14 Application CRs fixed: `repoURL` → `https://github.com/itbeans/sev-platform-2.1`; removed `scala-services/` path prefix.
+- `argocd/project.yaml` `sourceRepos` fixed to match.
+
+### Docker Compose gaps
+
+- `car` service: added missing `8080` HTTP port (Kong routes `/api/cars/*` to it).
+- Added `mailpit` service to `docker-compose-services.yml` (notification service depends on SMTP).
+- Fixed env fragment to include both `MONGODB_URI/MONGODB_DBNAME` and `MONGO_URI/MONGO_DB_NAME` (different services use different spellings).
+
+### JWT authentication gap (security)
+
+- `rest-api/Main.scala`: wired `AuthGrpcClient.live` into the layer graph.
+- `rest-api/RestApiServer.scala`: added `bearerAuth: HandlerAspect` that validates Bearer JWT against ev-auth-service over gRPC (fail-closed on unreachable auth service). Health + Swagger docs excluded from auth; all `/api/*` routes protected.
+
+### Billing gRPC stubs (unimplemented endpoints)
+
+- `BillingGrpcTransport.scala`: implemented all 4 previously-stubbed gRPC RPCs:
+  - `onboardBillingAccount` — creates Stripe Express account + account link + `BillingAccount` record.
+  - `activateBillingAccount` — checks Stripe `charges_enabled`; marks Active or generates new onboarding link.
+  - `finalizeTransfer` — transitions transfer status Draft → Finalized.
+  - `sendTransfer` — delegates to `billing.dispatchFundsForAccount`.
+- `build.sbt`: added `grpcDeps` + `.dependsOn(proto)` to `billingService` (required for ScalaPB types in `BillingGrpcTransport`).
+- `StripeClient`: added `retrieveAccount(accountId)` to trait and `LiveStripeClient`.
+- `BillingServiceSpec`: added 4 integration tests covering the new gRPC endpoints (in-memory stubs, no Stripe network calls).
 
 ### TypeScript Monolith Decommission
 

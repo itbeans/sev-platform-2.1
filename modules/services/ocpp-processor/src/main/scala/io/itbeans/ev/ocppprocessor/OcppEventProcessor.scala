@@ -130,7 +130,7 @@ final class OcppEventProcessor(
 
     repo.updateConnectorStatus(tenantId.value, stationId.value, connectorId, status, timestamp) *>
       // Trigger smart charging recomputation on status change
-      publishSmartChargingTrigger(tenantId, stationId) *>
+      publishSmartChargingTrigger(tenantId, stationId, "Reoptimize", Some(connectorId)) *>
       publishAuditLog(tenantId, stationId, "StatusNotification", s"Connector $connectorId status → $status")
 
   // ── Authorize ────────────────────────────────────────────────────────────
@@ -203,7 +203,7 @@ final class OcppEventProcessor(
         .append("createdOn", now)
         .append("lastChangedOn", now)
       _ <- repo.createTransaction(tenantId.value, doc)
-      _ <- publishTransactionLifecycle(tenantId, stationId, txIdStr, "Started", meterStart, now)
+      _ <- publishTransactionLifecycle(tenantId, stationId, txIdStr, "Start", connectorId, resolvedUserId, meterStart, now)
       _ <- publishAuditLog(
         tenantId,
         stationId,
@@ -230,16 +230,18 @@ final class OcppEventProcessor(
     for
       _ <- repo.closeTransaction(tenantId.value, txIdStr, closeDoc)
       txDocOpt <- repo.getTransaction(tenantId.value, txIdStr)
-      (meterStartWh, startEpochMs, userId, pricingModelJson, connectorType, connectorPowerKw) = txDocOpt match
-        case None => (0.0, now.getTime, None, None, "", 0.0)
-        case Some(d) =>
-          val ms  = Option(d.get("meterStart")).map(_.toString.toDoubleOption.getOrElse(0.0)).getOrElse(0.0)
-          val sd  = Option(d.getDate("startDate")).map(_.getTime).getOrElse(now.getTime)
-          val uid = Option(d.getString("userId")).orElse(Option(d.getString("tagId")))
-          val pmj = Option(d.getString("pricingModelJson")).filter(_.nonEmpty)
-          val ct  = Option(d.getString("connectorType")).getOrElse("")
-          val cpk = Option(d.get("connectorPowerKw")).map(_.toString.toDoubleOption.getOrElse(0.0)).getOrElse(0.0)
-          (ms, sd, uid, pmj, ct, cpk)
+      (meterStartWh, startEpochMs, userId, pricingModelJson, connectorType, connectorPowerKw, connectorId) =
+        txDocOpt match
+          case None => (0.0, now.getTime, None, None, "", 0.0, 1)
+          case Some(d) =>
+            val ms  = Option(d.get("meterStart")).map(_.toString.toDoubleOption.getOrElse(0.0)).getOrElse(0.0)
+            val sd  = Option(d.getDate("startDate")).map(_.getTime).getOrElse(now.getTime)
+            val uid = Option(d.getString("userId")).orElse(Option(d.getString("tagId")))
+            val pmj = Option(d.getString("pricingModelJson")).filter(_.nonEmpty)
+            val ct  = Option(d.getString("connectorType")).getOrElse("")
+            val cpk = Option(d.get("connectorPowerKw")).map(_.toString.toDoubleOption.getOrElse(0.0)).getOrElse(0.0)
+            val cid = Option(d.get("connectorId")).flatMap(_.toString.toIntOption).getOrElse(1)
+            (ms, sd, uid, pmj, ct, cpk, cid)
       consumptionWh = math.max(0.0, meterStop - meterStartWh)
       durationSecs = math.max(0L, (now.getTime - startEpochMs) / 1000)
       finalPriceOpt <- pricingModelJson match
@@ -261,7 +263,7 @@ final class OcppEventProcessor(
         )
       }
       _ <- publishTransactionLifecycleEnded(
-        tenantId, stationId, txIdStr,
+        tenantId, stationId, txIdStr, connectorId, reason,
         meterStartWh, meterStop, startEpochMs, now.getTime,
         consumptionWh, durationSecs, userId, finalPriceOpt
       )
@@ -425,7 +427,7 @@ final class OcppEventProcessor(
             .append("inProgress", true)
             .append("createdOn", now).append("lastChangedOn", now)
           _ <- repo.createTransaction(tenantId.value, doc)
-          _ <- publishTransactionLifecycle(tenantId, stationId, txId, "Started", meterValue, now)
+          _ <- publishTransactionLifecycle(tenantId, stationId, txId, "Start", connectorId, resolvedUserId, meterValue, now)
           _ <- publishAuditLog(tenantId, stationId, "TransactionEvent", s"Tx $txId started")
         yield ()
 
@@ -437,16 +439,18 @@ final class OcppEventProcessor(
         for
           _ <- repo.closeTransaction(tenantId.value, txId, closeDoc)
           txDocOpt <- repo.getTransaction(tenantId.value, txId)
-          (meterStartWh, startEpochMs, userId, pricingModelJson, connectorType, connectorPowerKw) = txDocOpt match
-            case None => (0.0, now.getTime, None, None, "", 0.0)
-            case Some(d) =>
-              val ms  = Option(d.get("meterStart")).map(_.toString.toDoubleOption.getOrElse(0.0)).getOrElse(0.0)
-              val sd  = Option(d.getDate("startDate")).map(_.getTime).getOrElse(now.getTime)
-              val uid = Option(d.getString("userId")).orElse(Option(d.getString("tagId")))
-              val pmj = Option(d.getString("pricingModelJson")).filter(_.nonEmpty)
-              val ct  = Option(d.getString("connectorType")).getOrElse("")
-              val cpk = Option(d.get("connectorPowerKw")).map(_.toString.toDoubleOption.getOrElse(0.0)).getOrElse(0.0)
-              (ms, sd, uid, pmj, ct, cpk)
+          (meterStartWh, startEpochMs, userId, pricingModelJson, connectorType, connectorPowerKw, connectorId) =
+            txDocOpt match
+              case None => (0.0, now.getTime, None, None, "", 0.0, 1)
+              case Some(d) =>
+                val ms  = Option(d.get("meterStart")).map(_.toString.toDoubleOption.getOrElse(0.0)).getOrElse(0.0)
+                val sd  = Option(d.getDate("startDate")).map(_.getTime).getOrElse(now.getTime)
+                val uid = Option(d.getString("userId")).orElse(Option(d.getString("tagId")))
+                val pmj = Option(d.getString("pricingModelJson")).filter(_.nonEmpty)
+                val ct  = Option(d.getString("connectorType")).getOrElse("")
+                val cpk = Option(d.get("connectorPowerKw")).map(_.toString.toDoubleOption.getOrElse(0.0)).getOrElse(0.0)
+                val cid = Option(d.get("connectorId")).flatMap(_.toString.toIntOption).getOrElse(1)
+                (ms, sd, uid, pmj, ct, cpk, cid)
           consumptionWh = math.max(0.0, meterValue - meterStartWh)
           durationSecs = math.max(0L, (now.getTime - startEpochMs) / 1000)
           finalPriceOpt <- pricingModelJson match
@@ -470,7 +474,7 @@ final class OcppEventProcessor(
             )
           }
           _ <- publishTransactionLifecycleEnded(
-            tenantId, stationId, txId,
+            tenantId, stationId, txId, connectorId, reason,
             meterStartWh, meterValue, startEpochMs, now.getTime,
             consumptionWh, durationSecs, userId, finalPriceOpt
           )
@@ -524,7 +528,7 @@ final class OcppEventProcessor(
   def handleDERStartStop(json: Json, tenantId: TenantId, stationId: ChargingStationId): Task[Unit] =
     val started = json.hcursor.downField("payload").downField("started").as[Boolean].getOrElse(false)
     ZIO.logInfo(s"[Processor] DER ${if started then "start" else "stop"} from ${stationId.value}") *>
-      publishSmartChargingTrigger(tenantId, stationId)
+      publishSmartChargingTrigger(tenantId, stationId, "Reoptimize", None)
 
   def handleBatterySwap(json: Json, tenantId: TenantId, stationId: ChargingStationId): Task[Unit] =
     val eventType = json.hcursor.downField("payload").downField("eventType").as[String].getOrElse("BatteryIn")
@@ -533,7 +537,7 @@ final class OcppEventProcessor(
   def handleAFRRSignal(json: Json, tenantId: TenantId, stationId: ChargingStationId): Task[Unit] =
     val signal = json.hcursor.downField("payload").downField("signal").as[Int].getOrElse(0)
     ZIO.logInfo(s"[Processor] AFRRSignal $signal mW from ${stationId.value}") *>
-      publishSmartChargingTrigger(tenantId, stationId)
+      publishSmartChargingTrigger(tenantId, stationId, "Reoptimize", None)
 
   // ── Connector metadata helper ─────────────────────────────────────────────
 
@@ -550,34 +554,57 @@ final class OcppEventProcessor(
 
   // ── Kafka publishing helpers ──────────────────────────────────────────────
 
+  // Billing and roaming correlate sessions by numeric transactionId. OCPP 1.6
+  // ids are always numeric; OCPP 2.x station-generated ids may not be — those
+  // are published as strings and skipped by consumers that require a Long.
+  private def txIdJson(txId: String): Json =
+    txId.toLongOption.fold(Json.fromString(txId))(Json.fromLong)
+
   private def publishTransactionLifecycle(
       tenantId: TenantId,
       stationId: ChargingStationId,
       txId: String,
       action: String,
+      connectorId: Int,
+      userId: Option[String],
       meter: Double,
       timestamp: java.util.Date
   ): Task[Unit] =
     val event = Json.obj(
       "tenantId"          -> Json.fromString(tenantId.value),
       "chargingStationId" -> Json.fromString(stationId.value),
-      "transactionId"     -> Json.fromString(txId),
+      "transactionId"     -> txIdJson(txId),
       "action"            -> Json.fromString(action),
+      "connectorId"       -> Json.fromInt(connectorId),
+      "userId"            -> userId.fold(Json.Null)(Json.fromString),
       "meterValue"        -> Json.fromDouble(meter).getOrElse(Json.fromInt(0)),
+      "meterStart"        -> Json.fromDouble(meter).getOrElse(Json.fromInt(0)),
       "timestamp"         -> Json.fromLong(timestamp.getTime)
     )
     producer.publish(Topics.transactionLifecycle, txId, event)
 
   private def publishSmartChargingTrigger(
       tenantId: TenantId,
-      stationId: ChargingStationId
+      stationId: ChargingStationId,
+      event: String,
+      connectorId: Option[Int]
   ): Task[Unit] =
-    val event = Json.obj(
-      "tenantId"  -> Json.fromString(tenantId.value),
-      "stationId" -> Json.fromString(stationId.value),
-      "timestamp" -> Json.fromLong(java.lang.System.currentTimeMillis())
-    )
-    producer.publish(Topics.smartChargingTriggers, stationId.value, event)
+    repo.getStation(tenantId.value, stationId.value).flatMap { stationDoc =>
+      stationDoc.flatMap(d => Option(d.get("siteAreaId")).map(_.toString)).filter(_.nonEmpty) match
+        case None =>
+          ZIO.logDebug(
+            s"[Processor] Station ${stationId.value} has no siteAreaId — smart-charging trigger skipped"
+          )
+        case Some(siteAreaId) =>
+          val payload = Json.obj(
+            "tenantId"          -> Json.fromString(tenantId.value),
+            "siteAreaId"        -> Json.fromString(siteAreaId),
+            "event"             -> Json.fromString(event),
+            "chargingStationId" -> Json.fromString(stationId.value),
+            "connectorId"       -> connectorId.fold(Json.Null)(Json.fromInt)
+          )
+          producer.publish(Topics.smartChargingTriggers, siteAreaId, payload)
+    }
 
   private def publishConsumptionIngest(
       tenantId: TenantId,
@@ -602,6 +629,8 @@ final class OcppEventProcessor(
       tenantId: TenantId,
       stationId: ChargingStationId,
       txId: String,
+      connectorId: Int,
+      stopReason: String,
       meterStartWh: Double,
       meterStopWh: Double,
       startEpochMs: Long,
@@ -614,15 +643,17 @@ final class OcppEventProcessor(
     val event = Json.obj(
       "tenantId"          -> Json.fromString(tenantId.value),
       "chargingStationId" -> Json.fromString(stationId.value),
-      "transactionId"     -> Json.fromString(txId),
-      "action"            -> Json.fromString("Ended"),
+      "transactionId"     -> txIdJson(txId),
+      "action"            -> Json.fromString("Stop"),
+      "connectorId"       -> Json.fromInt(connectorId),
+      "stopReason"        -> Json.fromString(stopReason),
       "meterValue"        -> Json.fromDouble(meterStopWh).getOrElse(Json.fromInt(0)),
       "timestamp"         -> Json.fromLong(endEpochMs),
       "userId"            -> userId.fold(Json.Null)(Json.fromString),
       "meterStart"        -> Json.fromDouble(meterStartWh).getOrElse(Json.fromInt(0)),
       "meterStop"         -> Json.fromDouble(meterStopWh).getOrElse(Json.fromInt(0)),
-      "startDate"         -> Json.fromLong(startEpochMs),
-      "endDate"           -> Json.fromLong(endEpochMs),
+      "startDate"         -> Json.fromString(Instant.ofEpochMilli(startEpochMs).toString),
+      "endDate"           -> Json.fromString(Instant.ofEpochMilli(endEpochMs).toString),
       "totalDurationSecs" -> Json.fromLong(durationSecs),
       "consumptionWh"     -> Json.fromDouble(consumptionWh).getOrElse(Json.fromInt(0)),
       "priceUnit"         -> finalPrice.fold(Json.Null)(fp => Json.fromString(fp.currency.toLowerCase)),

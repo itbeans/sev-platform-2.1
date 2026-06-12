@@ -150,13 +150,14 @@ lazy val authService = serviceProject("auth-service", "auth-service")
 // Stripe billing integration
 lazy val billingService = serviceProject("billing-service", "billing-service")
   .settings(
-    libraryDependencies ++= Seq(
+    libraryDependencies ++= grpcDeps ++ Seq(
       doobieCore, doobiePostgres, doobieHikari,
       pact4sZioTest % Test,
       pact4sCirce   % Test,
     ),
-    dockerExposedPorts := Seq(8080),
+    dockerExposedPorts := Seq(8080, 9090),
   )
+  .dependsOn(proto)
 
 // Tariff engine — gRPC server
 lazy val pricingService = serviceProject("pricing-service", "pricing-service")
