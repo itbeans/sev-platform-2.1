@@ -24,10 +24,14 @@ object SmartChargingSpec extends ZIOSpecDefault:
         cars = request.state.cars.map(car => car.copy(currentPlan = plan))
       ))
 
+    def checkConnection: Task[Boolean] = ZIO.succeed(true)
+
   class FailingSapClient(msg: String) extends SapSmartChargingClient:
 
     def optimize(request: OptimizerRequest): Task[OptimizerResult] =
       ZIO.fail(new Exception(msg))
+
+    def checkConnection: Task[Boolean] = ZIO.succeed(false)
 
   // ── Stub gateway client (no station delivery in unit tests) ──────────────
 
@@ -181,6 +185,7 @@ object SmartChargingSpec extends ZIOSpecDefault:
               capturedRequest = Some(req)
               OptimizerResult(cars = Nil)
             }
+          def checkConnection: Task[Boolean] = ZIO.succeed(true)
         val svc = new LiveSmartChargingService(repo, sap, NoOpGatewayClient, testConfig)
 
         for
@@ -203,6 +208,7 @@ object SmartChargingSpec extends ZIOSpecDefault:
               capturedRequest = Some(req)
               OptimizerResult(cars = Nil)
             }
+          def checkConnection: Task[Boolean] = ZIO.succeed(true)
         val svc = new LiveSmartChargingService(repo, sap, NoOpGatewayClient, testConfig)
 
         for
@@ -229,6 +235,7 @@ object SmartChargingSpec extends ZIOSpecDefault:
               capturedRequest = Some(req)
               OptimizerResult(cars = req.state.cars.map(_.copy(currentPlan = List(16.0))))
             }
+          def checkConnection: Task[Boolean] = ZIO.succeed(true)
         val svc = new LiveSmartChargingService(repo, sap, NoOpGatewayClient, testConfig)
 
         for
@@ -252,11 +259,11 @@ object SmartChargingSpec extends ZIOSpecDefault:
 
         for
           resp <- handler.triggerSmartCharging(
-            TriggerSmartChargingRequestADT("test-tenant", "sa-001", "Reoptimize")
+            TriggerSmartChargingRequestADT("test-tenant", "sa-001")
           )
         yield assertTrue(resp.success)
       },
-      test("getChargingProfiles returns profiles saved by service") {
+      test("buildChargingProfiles returns computed profiles without delivering them") {
         val repo = new InMemorySmartChargingRepository(
           siteAreaData = Map("sa-001" -> testSiteArea),
           txData = Map("sa-001" -> List(testTransaction))
@@ -266,13 +273,12 @@ object SmartChargingSpec extends ZIOSpecDefault:
         val handler = new LiveSmartChargingGrpcHandler(svc, sap)
 
         for
-          _ <- svc.triggerOptimization("test-tenant", "sa-001", "Reoptimize")
-          resp <- handler.getChargingProfiles(
-            GetChargingProfilesRequestADT("test-tenant", "sa-001")
+          resp <- handler.buildChargingProfiles(
+            BuildChargingProfilesRequestADT("test-tenant", "sa-001")
           )
         yield assertTrue(resp.profiles.nonEmpty) &&
           assertTrue(resp.profiles.head.chargingStationId == "CS-001") &&
-          assertTrue(resp.profiles.head.purpose == "TxProfile")
+          assertTrue(resp.profiles.head.chargingProfileJson.contains("TxProfile"))
       }
     )
   )

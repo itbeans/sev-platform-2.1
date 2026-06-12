@@ -266,17 +266,30 @@ final class BillingGrpcTransport(
               success = false,
               error = s"Transfer must be finalized before sending; current status: ${transfer.status.code}"
             ))
+          else if transfer.transferAmountCents <= 0 then
+            ZIO.succeed(SendTransferResponse(success = false, error = "Transfer has no funds to dispatch"))
           else
-            billing.dispatchFundsForAccount(req.tenantId, transfer.accountId, transfer.currency).map {
-              case None =>
-                SendTransferResponse(success = false, error = "No funds to dispatch or account not onboarded to Stripe")
-              case Some(t) =>
-                SendTransferResponse(
-                  success = true,
-                  transferExternalId = t.transferExternalId.getOrElse(""),
-                  status = t.status.code
-                )
-            }.catchAll(err => ZIO.succeed(SendTransferResponse(success = false, error = err.getMessage)))
+            // dispatchFundsForAccount only handles the Draft (periodic) flow —
+            // disburse the finalized transfer directly via Stripe.
+            (for
+              stripeResp <- stripe.createTransfer(
+                transfer.transferAmountCents,
+                transfer.currency,
+                transfer.accountExternalId,
+                s"EV platform payout — ${transfer.sessionCounter} sessions"
+              )
+              transferId = stripeResp.hcursor.downField("id").as[String].getOrElse("")
+              updated = transfer.copy(
+                status = TransferStatus.Transferred,
+                transferExternalId = Some(transferId),
+                lastChangedOn = java.time.Instant.now()
+              )
+              _ <- transferRepo.update(updated)
+            yield SendTransferResponse(
+              success = true,
+              transferExternalId = transferId,
+              status = updated.status.code
+            )).catchAll(err => ZIO.succeed(SendTransferResponse(success = false, error = err.getMessage)))
       }
     }
 

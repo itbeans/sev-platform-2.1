@@ -41,6 +41,9 @@ object OcppProcessorSpec extends ZIOSpecDefault:
         stations = doc.append("_id", stationId) :: stations
       }
 
+    def getStation(tenantId: String, stationId: String): Task[Option[Document]] =
+      ZIO.succeed(stations.find(_.getString("_id") == stationId))
+
     def updateConnectorStatus(
         tenantId: String,
         stationId: String,

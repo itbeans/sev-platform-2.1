@@ -215,6 +215,25 @@ object RestApiSpec extends ZIOSpecDefault:
     def deleteRegistrationToken(tenantId: String, id: String): Task[Boolean] =
       ZIO.succeed(false)
 
+    // Notifications — no-op stubs
+    def listNotifications(
+        tenantId: String,
+        limit: Int,
+        skip: Int,
+        userId: Option[String],
+        channel: Option[String]
+    ): Task[PagedResult[org.bson.Document]] =
+      ZIO.succeed(PagedResult(Nil, 0))
+
+    def deleteNotification(tenantId: String, id: String): Task[Boolean] =
+      ZIO.succeed(false)
+
+    def getNotificationPreferences(tenantId: String, userId: String): Task[Option[io.circe.Json]] =
+      ZIO.succeed(None)
+
+    def upsertNotificationPreferences(tenantId: String, userId: String, body: io.circe.Json): Task[Unit] =
+      ZIO.unit
+
   // ── Fixtures ──────────────────────────────────────────────────────────────
 
   val now = Instant.parse("2024-06-15T12:00:00Z")
