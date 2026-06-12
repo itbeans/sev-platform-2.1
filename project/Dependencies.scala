@@ -100,7 +100,6 @@ object Dependencies {
   val otelApi    = "io.opentelemetry" % "opentelemetry-api"                         % Versions.otel
   val otelSdk    = "io.opentelemetry" % "opentelemetry-sdk"                         % Versions.otel
   val otelExporter = "io.opentelemetry" % "opentelemetry-exporter-otlp"             % Versions.otel
-  val otelZio    = "io.opentelemetry.instrumentation" % "opentelemetry-zio-2.0"     % Versions.otelAlpha
 
   // ── Email (Jakarta Mail / SMTP) ───────────────────────────────────────────
   val jakartaMail = "org.eclipse.angus" % "angus-mail" % "2.0.3"
@@ -144,7 +143,6 @@ object Dependencies {
   val otelZioDeps: Seq[ModuleID] = Seq(
     zio,
     otelApi, otelSdk, otelExporter,
-    otelZio, // ZIO fiber-local context storage (ServiceLoader SPI)
   )
 
   val serviceBaseDeps: Seq[ModuleID] = Seq(
@@ -155,7 +153,6 @@ object Dependencies {
     tapirCore, tapirZioHttp, tapirCirce, tapirOpenApi, tapirSwaggerUi,
     logback,
     otelApi, otelSdk, otelExporter,
-    otelZio, // ZIO fiber context storage — must be on classpath at startup
     zioTest % Test, zioTestSbt % Test, zioTestMagnolia % Test
   )
 

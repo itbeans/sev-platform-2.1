@@ -113,18 +113,18 @@ object BillingEndpoints:
 
   private def recordToInvoice(rec: io.itbeans.ev.billing.grpc.billing_service.InvoiceRecord): Invoice =
     Invoice(
-      id            = rec.id,
-      tenantId      = rec.tenantId,
-      userId        = rec.userId,
-      userEmail     = "",
-      number        = rec.invoiceNumber,
-      status        = rec.status,
-      amount        = rec.amountCents / 100.0,
-      currency      = rec.currency,
-      periodFrom    = rec.createdOn,
-      periodTo      = rec.lastChangedOn,
-      downloadUrl   = if rec.downloadUrl.nonEmpty then Some(rec.downloadUrl) else None,
-      createdOn     = rec.createdOn,
+      id = rec.id,
+      tenantId = rec.tenantId,
+      userId = rec.userId,
+      userEmail = "",
+      number = rec.invoiceNumber,
+      status = rec.status,
+      amount = rec.amountCents / 100.0,
+      currency = rec.currency,
+      periodFrom = rec.createdOn,
+      periodTo = rec.lastChangedOn,
+      downloadUrl = if rec.downloadUrl.nonEmpty then Some(rec.downloadUrl) else None,
+      createdOn = rec.createdOn,
       lastChangedOn = rec.lastChangedOn
     )
 

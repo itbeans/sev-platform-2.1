@@ -53,10 +53,10 @@ final class LiveSmartChargingGatewayClient(
     }
 
     val schedule = Json.obj(
-      "id"                     -> Json.fromInt(p.profile.chargingProfileId),
-      "startSchedule"          -> p.profile.chargingSchedule.startSchedule.fold(Json.Null)(t => Json.fromString(t.toString)),
-      "duration"               -> p.profile.chargingSchedule.durationSecs.fold(Json.Null)(Json.fromInt),
-      "chargingRateUnit"       -> Json.fromString(p.profile.chargingSchedule.chargingRateUnit),
+      "id"               -> Json.fromInt(p.profile.chargingProfileId),
+      "startSchedule"    -> p.profile.chargingSchedule.startSchedule.fold(Json.Null)(t => Json.fromString(t.toString)),
+      "duration"         -> p.profile.chargingSchedule.durationSecs.fold(Json.Null)(Json.fromInt),
+      "chargingRateUnit" -> Json.fromString(p.profile.chargingSchedule.chargingRateUnit),
       "chargingSchedulePeriod" -> Json.arr(periods*)
     )
 

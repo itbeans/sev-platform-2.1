@@ -4,7 +4,7 @@ import io.circe.syntax._
 import io.circe.generic.auto._
 import io.github.jbwheatley.pact4s.circe.CirceJsonEncoding
 import io.github.jbwheatley.pact4s.ziotest.PactForgerSuite
-import io.github.jbwheatley.pact4s.{ PactForger, RequestResponsePact }
+import io.github.jbwheatley.pact4s.{PactForger, RequestResponsePact}
 import io.github.jbwheatley.pact4s.dsl.PactDsl
 import io.github.jbwheatley.pact4s.model._
 import zio._
@@ -88,7 +88,7 @@ object AuthServicePactSpec extends PactForgerSuite with CirceJsonEncoding:
         Map(
           "tenant"   -> "test-tenant",
           "email"    -> "driver@example.com",
-          "password" -> "correct-horse",
+          "password" -> "correct-horse"
         ).asJson
       )
       .willRespondWith()
@@ -110,12 +110,12 @@ object AuthServicePactSpec extends PactForgerSuite with CirceJsonEncoding:
         Map(
           "tenant"   -> "test-tenant",
           "email"    -> "driver@example.com",
-          "password" -> "wrong-password",
+          "password" -> "wrong-password"
         ).asJson
       )
       .willRespondWith()
       .status(401)
-      .toPact,
+      .toPact
   )
 
   // ── ZIO Test suite — exercises the consumer against the pact mock server ──
@@ -125,7 +125,7 @@ object AuthServicePactSpec extends PactForgerSuite with CirceJsonEncoding:
       test("POST /auth/check-token with valid token → 200 with user info") {
         for
           baseUrl <- ZIO.serviceWith[PactForger](_.mockServer.getUrl)
-          resp    <- ZIO.attempt(
+          resp <- ZIO.attempt(
             sttp.client3.quickRequest
               .post(uri"$baseUrl/auth/check-token")
               .header("Content-Type", "application/json")
@@ -137,7 +137,7 @@ object AuthServicePactSpec extends PactForgerSuite with CirceJsonEncoding:
       test("POST /auth/check-token with expired token → 401") {
         for
           baseUrl <- ZIO.serviceWith[PactForger](_.mockServer.getUrl)
-          resp    <- ZIO.attempt(
+          resp <- ZIO.attempt(
             sttp.client3.quickRequest
               .post(uri"$baseUrl/auth/check-token")
               .header("Content-Type", "application/json")
@@ -145,5 +145,5 @@ object AuthServicePactSpec extends PactForgerSuite with CirceJsonEncoding:
               .send(sttp.client3.HttpURLConnectionBackend())
           )
         yield assertTrue(resp.code.code == 401)
-      },
+      }
     )

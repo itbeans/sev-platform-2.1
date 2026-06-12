@@ -4,7 +4,7 @@ import io.circe.syntax._
 import io.circe.generic.auto._
 import io.github.jbwheatley.pact4s.circe.CirceJsonEncoding
 import io.github.jbwheatley.pact4s.ziotest.MessagePactForgerSuite
-import io.github.jbwheatley.pact4s.{ MessagePactForger, MessagePact }
+import io.github.jbwheatley.pact4s.{MessagePact, MessagePactForger}
 import io.github.jbwheatley.pact4s.dsl.MessagePactDsl
 import zio._
 import zio.test._
@@ -26,7 +26,6 @@ object TransactionLifecyclePactSpec extends MessagePactForgerSuite with CirceJso
   // ── Interactions ──────────────────────────────────────────────────────────
 
   override val pacts: List[MessagePact] = List(
-
     // ── Interaction 1: tx stopped with ENERGY dimension ─────────────────────
     MessagePactDsl
       .consumer("ev-billing-service")
@@ -119,7 +118,7 @@ object TransactionLifecyclePactSpec extends MessagePactForgerSuite with CirceJso
           |  "dimensions":        []
           |}""".stripMargin
       )
-      .toPact,
+      .toPact
   )
 
   // ── ZIO Test suite — deserialise each message and verify business rules ───
@@ -136,7 +135,7 @@ object TransactionLifecyclePactSpec extends MessagePactForgerSuite with CirceJso
           parsed.action == "Stop",
           parsed.consumptionKwh > 0,
           parsed.dimensions.nonEmpty,
-          parsed.userId.nonEmpty,
+          parsed.userId.nonEmpty
         )
       },
       test("Stop event with time + energy dimensions is deserializable") {
@@ -147,7 +146,7 @@ object TransactionLifecyclePactSpec extends MessagePactForgerSuite with CirceJso
           parsed <- ZIO.fromEither(io.circe.parser.decode[BillingPayloadPreview](msg.body))
         yield assertTrue(
           parsed.action == "Stop",
-          parsed.dimensions.size == 2,
+          parsed.dimensions.size == 2
         )
       },
       test("Start event is deserializable (billing ignores action)") {
@@ -157,15 +156,16 @@ object TransactionLifecyclePactSpec extends MessagePactForgerSuite with CirceJso
           )
           parsed <- ZIO.fromEither(io.circe.parser.decode[BillingPayloadPreview](msg.body))
         yield assertTrue(parsed.action == "Start")
-      },
+      }
     )
 
 // Minimal projection of the Kafka payload — used only to verify deserialization
 private case class DimensionPreview(`type`: String, amountCents: Int)
+
 private case class BillingPayloadPreview(
-  action:            String,
-  transactionId:     Long,
-  userId:            String,
-  consumptionKwh:    Double,
-  dimensions:        List[DimensionPreview],
+    action: String,
+    transactionId: Long,
+    userId: String,
+    consumptionKwh: Double,
+    dimensions: List[DimensionPreview]
 )

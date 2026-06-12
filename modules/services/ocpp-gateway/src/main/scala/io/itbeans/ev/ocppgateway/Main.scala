@@ -68,6 +68,6 @@ object Main extends ZIOAppDefault:
       )
       _ <- ZIO.scoped(relay.startCommandConsumer).forkDaemon  // fan-out: relay inbound commands
       _ <- ZIO.scoped(relay.startResponseConsumer).forkDaemon // fan-out: relay responses
-      _ <- OcppGatewayGrpcTransport.start // start Netty gRPC server (non-blocking)
-      _ <- server.start                   // start ZIO HTTP WebSocket server (blocks)
+      _ <- OcppGatewayGrpcTransport.start                     // start Netty gRPC server (non-blocking)
+      _ <- server.start                                       // start ZIO HTTP WebSocket server (blocks)
     yield ()

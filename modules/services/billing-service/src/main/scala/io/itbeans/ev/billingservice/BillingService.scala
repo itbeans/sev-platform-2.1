@@ -248,11 +248,11 @@ final class LiveBillingService(
 
         // 2. Proportional fallback based on session metrics
         case None =>
-          val totalCents      = math.round(totalCost * 100).toInt
-          val energyKwh       = payload.consumptionWh.map(_ / 1000.0).getOrElse(0.0)
-          val durationSecs    = payload.totalDurationSecs.getOrElse(0L)
-          val inactivitySecs  = payload.totalInactivitySecs.getOrElse(0L)
-          val chargingSecs    = math.max(0L, durationSecs - inactivitySecs)
+          val totalCents     = math.round(totalCost * 100).toInt
+          val energyKwh      = payload.consumptionWh.map(_ / 1000.0).getOrElse(0.0)
+          val durationSecs   = payload.totalDurationSecs.getOrElse(0L)
+          val inactivitySecs = payload.totalInactivitySecs.getOrElse(0L)
+          val chargingSecs   = math.max(0L, durationSecs - inactivitySecs)
 
           // Weight: energy (80% if both present), time (15%), parking (5%)
           // Adjusted so that zero-quantity dimensions are omitted.
@@ -261,9 +261,9 @@ final class LiveBillingService(
           val hasParking = inactivitySecs > 0
 
           val weights = List(
-            if hasEnergy  then Some(("energy",   0.80)) else None,
-            if hasTime    then Some(("time",      0.15)) else None,
-            if hasParking then Some(("parking",   0.05)) else None
+            if hasEnergy then Some(("energy", 0.80)) else None,
+            if hasTime then Some(("time", 0.15)) else None,
+            if hasParking then Some(("parking", 0.05)) else None
           ).flatten
 
           val totalWeight = weights.map(_._2).sum

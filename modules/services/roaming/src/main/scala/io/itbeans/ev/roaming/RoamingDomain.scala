@@ -345,6 +345,7 @@ case class TransactionLifecyclePayload(
 )
 
 object TransactionLifecyclePayload:
+
   // ev-ocpp-processor emits transactionId as a JSON number for OCPP 1.6 and as
   // a string for OCPP 2.x station-generated ids — accept both when numeric.
   private given Decoder[Long] =

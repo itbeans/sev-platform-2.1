@@ -9,6 +9,7 @@ object RegistrationTokenId:
   def apply(v: String): RegistrationTokenId             = v
   def unapply(id: RegistrationTokenId): Some[String]    = Some(id)
   extension (id: RegistrationTokenId) def value: String = id
+
   given Schema[RegistrationTokenId] =
     Schema.Primitive(StandardType.StringType, zio.Chunk.empty).transform(RegistrationTokenId(_), _.value)
 
@@ -78,9 +79,9 @@ case class TenantSettings(
 )
 
 object Settings:
-  given Schema[RegistrationToken]      = DeriveSchema.gen
-  given Schema[OcppEndpointSettings]   = DeriveSchema.gen
-  given Schema[SmartChargingSettings]  = DeriveSchema.gen
-  given Schema[BillingSettings]        = DeriveSchema.gen
-  given Schema[AnalyticsSettings]      = DeriveSchema.gen
-  given Schema[TenantSettings]         = DeriveSchema.gen
+  given Schema[RegistrationToken] = DeriveSchema.gen
+  given Schema[OcppEndpointSettings] = DeriveSchema.gen
+  given Schema[SmartChargingSettings] = DeriveSchema.gen
+  given Schema[BillingSettings] = DeriveSchema.gen
+  given Schema[AnalyticsSettings] = DeriveSchema.gen
+  given Schema[TenantSettings] = DeriveSchema.gen

@@ -12,11 +12,11 @@ enum StatisticScope:
   case Tenant, Site, SiteArea, ChargingStation, User
 
 enum StatisticDataType:
-  case Consumption    // kWh
-  case Usage          // session count
-  case Inactivity     // idle time percentage
-  case Pricing        // revenue
-  case Sessions       // raw session count
+  case Consumption // kWh
+  case Usage       // session count
+  case Inactivity  // idle time percentage
+  case Pricing     // revenue
+  case Sessions    // raw session count
   case ActiveSessions
 
 enum StatisticUnit:
@@ -25,7 +25,7 @@ enum StatisticUnit:
 // One data point in a time-series or category breakdown
 case class StatPoint(
     label: String,
-    period: String,     // "YYYY-MM-DD", "YYYY-WW", "YYYY-MM", etc.
+    period: String, // "YYYY-MM-DD", "YYYY-WW", "YYYY-MM", etc.
     value: Double
 )
 
@@ -58,9 +58,9 @@ case class ConsumptionIngestRecord(
 )
 
 object Statistics:
-  given Schema[StatisticScope]         = DeriveSchema.gen
-  given Schema[StatisticDataType]      = DeriveSchema.gen
-  given Schema[StatisticUnit]          = DeriveSchema.gen
-  given Schema[StatPoint]              = DeriveSchema.gen
-  given Schema[StatisticsResult]       = DeriveSchema.gen
+  given Schema[StatisticScope] = DeriveSchema.gen
+  given Schema[StatisticDataType] = DeriveSchema.gen
+  given Schema[StatisticUnit] = DeriveSchema.gen
+  given Schema[StatPoint] = DeriveSchema.gen
+  given Schema[StatisticsResult] = DeriveSchema.gen
   given Schema[ConsumptionIngestRecord] = DeriveSchema.gen

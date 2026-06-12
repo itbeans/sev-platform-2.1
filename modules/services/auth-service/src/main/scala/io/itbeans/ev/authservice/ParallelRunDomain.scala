@@ -35,10 +35,10 @@ case class ParallelRunComparison(
     tenantId: String,
     userEmail: String,
     timestamp: Instant,
-    matched: Boolean,             // true when diffs is empty
+    matched: Boolean, // true when diffs is empty
     diffCount: Int,
-    diffs: Map[String, FieldDiff],// field name → (tsValue, scalaValue)
-    scalaToken: String            // Scala JWT stored for debugging
+    diffs: Map[String, FieldDiff], // field name → (tsValue, scalaValue)
+    scalaToken: String             // Scala JWT stored for debugging
 )
 
 object ParallelRunComparison:
@@ -47,9 +47,9 @@ object ParallelRunComparison:
 
 /** Input to POST /auth/parallel-run/compare */
 case class ParallelRunCompareRequest(
-    tenant: String,   // tenant subdomain (empty = super-admin)
+    tenant: String, // tenant subdomain (empty = super-admin)
     email: String,
-    tsToken: String   // JWT issued by the TypeScript monolith
+    tsToken: String // JWT issued by the TypeScript monolith
 )
 
 object ParallelRunCompareRequest:

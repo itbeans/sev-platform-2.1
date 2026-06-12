@@ -42,7 +42,20 @@ object SmartChargingConfig:
       Config.string("gatewayGrpcHost") zip
       Config.int("gatewayGrpcPort")
   ).nested("smartCharging").map {
-    case (httpPort, grpcPort, optimUrl, optimUser, optimPass, debounce, periodic, voltage, phases, tenantId, gwHost, gwPort) =>
+    case (
+          httpPort,
+          grpcPort,
+          optimUrl,
+          optimUser,
+          optimPass,
+          debounce,
+          periodic,
+          voltage,
+          phases,
+          tenantId,
+          gwHost,
+          gwPort
+        ) =>
       SmartChargingConfig(
         httpPort,
         grpcPort,

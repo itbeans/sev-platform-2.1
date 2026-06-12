@@ -17,12 +17,12 @@ object InvoiceId:
 // ---------------------------------------------------------------------------
 
 enum InvoiceStatus(val code: String):
-  case Draft        extends InvoiceStatus("draft")
-  case Open         extends InvoiceStatus("open")
-  case Paid         extends InvoiceStatus("paid")
-  case Void         extends InvoiceStatus("void")
+  case Draft         extends InvoiceStatus("draft")
+  case Open          extends InvoiceStatus("open")
+  case Paid          extends InvoiceStatus("paid")
+  case Void          extends InvoiceStatus("void")
   case Uncollectible extends InvoiceStatus("uncollectible")
-  case Deleted      extends InvoiceStatus("deleted")
+  case Deleted       extends InvoiceStatus("deleted")
 
 enum BillingAccountStatus(val code: String):
   case Idle    extends BillingAccountStatus("idle")
@@ -30,9 +30,9 @@ enum BillingAccountStatus(val code: String):
   case Active  extends BillingAccountStatus("active")
 
 enum BillingTransferStatus(val code: String):
-  case Draft     extends BillingTransferStatus("draft")
-  case Pending   extends BillingTransferStatus("pending")
-  case Finalized extends BillingTransferStatus("finalized")
+  case Draft       extends BillingTransferStatus("draft")
+  case Pending     extends BillingTransferStatus("pending")
+  case Finalized   extends BillingTransferStatus("finalized")
   case Transferred extends BillingTransferStatus("transferred")
 
 // One line-item dimension within an invoice (energy, flat-fee, time, etc.)
@@ -59,14 +59,14 @@ case class BillingSessionData(
 case class Invoice(
     id: InvoiceId,
     tenantId: TenantId,
-    invoiceId: String,          // Stripe invoice ID
+    invoiceId: String, // Stripe invoice ID
     invoiceNumber: Option[String],
     status: InvoiceStatus,
     amountCents: Int,
     amountPaidCents: Int,
     currency: String,
     userId: UserId,
-    customerId: String,         // Stripe customer ID
+    customerId: String, // Stripe customer ID
     liveMode: Boolean,
     sessions: List[BillingSessionData],
     downloadUrl: Option[String],
@@ -83,7 +83,7 @@ case class BillingAccount(
     businessOwnerUserId: UserId,
     companyName: String,
     status: BillingAccountStatus,
-    accountExternalId: Option[String],  // Stripe account ID
+    accountExternalId: Option[String], // Stripe account ID
     activationLink: Option[String],
     createdOn: Instant,
     createdBy: UserId
@@ -109,18 +109,18 @@ case class BillingTransfer(
 case class BillingUser(
     userId: UserId,
     tenantId: TenantId,
-    customerId: String,                 // Stripe customer ID
+    customerId: String, // Stripe customer ID
     defaultPaymentMethodId: Option[String],
     createdOn: Instant
 )
 
 object Billing:
-  given Schema[InvoiceStatus]         = DeriveSchema.gen
-  given Schema[BillingAccountStatus]  = DeriveSchema.gen
+  given Schema[InvoiceStatus] = DeriveSchema.gen
+  given Schema[BillingAccountStatus] = DeriveSchema.gen
   given Schema[BillingTransferStatus] = DeriveSchema.gen
-  given Schema[BillingDimension]      = DeriveSchema.gen
-  given Schema[BillingSessionData]    = DeriveSchema.gen
-  given Schema[Invoice]               = DeriveSchema.gen
-  given Schema[BillingAccount]        = DeriveSchema.gen
-  given Schema[BillingTransfer]       = DeriveSchema.gen
-  given Schema[BillingUser]           = DeriveSchema.gen
+  given Schema[BillingDimension] = DeriveSchema.gen
+  given Schema[BillingSessionData] = DeriveSchema.gen
+  given Schema[Invoice] = DeriveSchema.gen
+  given Schema[BillingAccount] = DeriveSchema.gen
+  given Schema[BillingTransfer] = DeriveSchema.gen
+  given Schema[BillingUser] = DeriveSchema.gen

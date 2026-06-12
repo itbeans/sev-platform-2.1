@@ -47,6 +47,7 @@ final class MongoSiteRepository(db: MongoDatabase) extends SiteRepository:
     col(tenantId).deleteOne(Filters.eq("_id", id.value))
 
 object MongoSiteRepository:
+
   val live: ZLayer[MongoDatabase, Nothing, SiteRepository] =
     ZLayer.fromFunction(MongoSiteRepository(_))
 
@@ -87,6 +88,7 @@ final class MongoSiteAreaRepository(db: MongoDatabase) extends SiteAreaRepositor
     col(tenantId).deleteOne(Filters.eq("_id", id.value))
 
 object MongoSiteAreaRepository:
+
   val live: ZLayer[MongoDatabase, Nothing, SiteAreaRepository] =
     ZLayer.fromFunction(MongoSiteAreaRepository(_))
 
@@ -123,5 +125,6 @@ final class MongoCompanyRepository(db: MongoDatabase) extends CompanyRepository:
     col(tenantId).deleteOne(Filters.eq("_id", id.value))
 
 object MongoCompanyRepository:
+
   val live: ZLayer[MongoDatabase, Nothing, CompanyRepository] =
     ZLayer.fromFunction(MongoCompanyRepository(_))
