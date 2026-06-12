@@ -90,7 +90,8 @@ object TransactionEndpoints:
     exportEp.zServerLogic { case (tenantId, inProgress, stationId) =>
       repo.listTransactions(tenantId, limit = 10000, skip = 0, inProgress, stationId, userId = None)
         .map { pr =>
-          val header = "ID,ChargingStationID,ConnectorID,UserID,TagID,StartDate,EndDate,MeterStart,MeterStop,ConsumptionWh,DurationSecs,Price,Currency,StopReason,OcppVersion\n"
+          val header =
+            "ID,ChargingStationID,ConnectorID,UserID,TagID,StartDate,EndDate,MeterStart,MeterStop,ConsumptionWh,DurationSecs,Price,Currency,StopReason,OcppVersion\n"
           val rows = pr.result.map { t =>
             List(
               t.id.value.toString,

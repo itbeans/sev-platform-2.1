@@ -113,7 +113,13 @@ trait RestApiRepository:
   def deleteRegistrationToken(tenantId: String, id: String): Task[Boolean]
 
   // Notifications
-  def listNotifications(tenantId: String, limit: Int, skip: Int, userId: Option[String], channel: Option[String]): Task[PagedResult[Document]]
+  def listNotifications(
+      tenantId: String,
+      limit: Int,
+      skip: Int,
+      userId: Option[String],
+      channel: Option[String]
+  ): Task[PagedResult[Document]]
   def deleteNotification(tenantId: String, id: String): Task[Boolean]
   def getNotificationPreferences(tenantId: String, userId: String): Task[Option[io.circe.Json]]
   def upsertNotificationPreferences(tenantId: String, userId: String, body: io.circe.Json): Task[Unit]
@@ -404,7 +410,13 @@ final class MongoRestApiRepository(db: MongoDatabase) extends RestApiRepository:
 
   // ── Notifications ─────────────────────────────────────────────────────────
 
-  def listNotifications(tenantId: String, limit: Int, skip: Int, userId: Option[String], channel: Option[String]): Task[PagedResult[Document]] =
+  def listNotifications(
+      tenantId: String,
+      limit: Int,
+      skip: Int,
+      userId: Option[String],
+      channel: Option[String]
+  ): Task[PagedResult[Document]] =
     val filters = List(
       userId.map(id => equal("userId", id)),
       channel.map(c => equal("channel", c))

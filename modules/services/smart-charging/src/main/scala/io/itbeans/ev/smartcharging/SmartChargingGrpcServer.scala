@@ -22,6 +22,7 @@ case class TriggerSmartChargingRequestADT(
     siteAreaId: String,
     retry: Boolean = false
 )
+
 case class TriggerSmartChargingResponseADT(
     success: Boolean,
     profilesApplied: Int,
@@ -37,12 +38,14 @@ case class BuildChargingProfilesRequestADT(
     siteAreaId: String,
     excludedStationIds: List[String] = Nil
 )
+
 case class ChargingProfileResultADT(
     chargingStationId: String,
     connectorId: Int,
     chargingProfileJson: String,
     limitWatts: Double
 )
+
 case class BuildChargingProfilesResponseADT(
     profiles: List[ChargingProfileResultADT],
     error: String = ""
@@ -73,7 +76,10 @@ final class LiveSmartChargingGrpcHandler(
           s"[SmartCharging] gRPC trigger failed for ${req.siteAreaId}: ${err.getMessage}"
         ) *>
           ZIO.succeed(TriggerSmartChargingResponseADT(
-            success = false, profilesApplied = 0, profilesFailed = 0, error = err.getMessage
+            success = false,
+            profilesApplied = 0,
+            profilesFailed = 0,
+            error = err.getMessage
           ))
       }
 

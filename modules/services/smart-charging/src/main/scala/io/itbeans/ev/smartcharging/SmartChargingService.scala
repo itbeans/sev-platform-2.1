@@ -82,8 +82,8 @@ final class LiveSmartChargingService(
         .orElseFail(new Exception(s"SiteArea $siteAreaId not found for tenant $tenantId"))
       txs <- repo.findActiveTransactions(tenantId, siteAreaId)
       filteredTxs = txs.filterNot(tx => excludedStationIds.contains(tx.chargingStationId))
-      request = buildRequest(siteArea, filteredTxs, "Reoptimize")
-      result  <- optimizer.optimize(request)
+      request     = buildRequest(siteArea, filteredTxs, "Reoptimize")
+      result <- optimizer.optimize(request)
     yield buildProfiles(tenantId, siteAreaId, siteArea.siteId, filteredTxs, result, siteArea)
 
   // ── Build OptimizerRequest ────────────────────────────────────────────
@@ -93,8 +93,8 @@ final class LiveSmartChargingService(
       txs: List[ActiveTransactionSC],
       event: String
   ): OptimizerRequest =
-    val voltage   = siteArea.voltage.getOrElse(cfg.defaultVoltage).toDouble
-    val numPhases = siteArea.numberOfPhases.getOrElse(cfg.defaultNumberPhases)
+    val voltage      = siteArea.voltage.getOrElse(cfg.defaultVoltage).toDouble
+    val numPhases    = siteArea.numberOfPhases.getOrElse(cfg.defaultNumberPhases)
     val gridFuseAmps = siteArea.maximumPower / (voltage * numPhases)
 
     // Group transactions by charging station to build per-station child fuses.
@@ -110,7 +110,7 @@ final class LiveSmartChargingService(
     // Amperage = sum of max connector amperage across all active transactions on that station.
     val stationFuses: Map[String, OptimizerFuse] =
       stationFuseIds.map { case (stationId, fuseId) =>
-        val stationTxs = txByStation(stationId)
+        val stationTxs  = txByStation(stationId)
         val stationAmps = stationTxs.map(_.maxCurrentA).sum.max(gridFuseAmps / stationFuseIds.size)
         stationId -> OptimizerFuse(
           id = fuseId,

@@ -1,7 +1,7 @@
 package io.itbeans.ev.mongo
 
 import io.itbeans.ev.domain._
-import io.itbeans.ev.mongo.DomainBsonCodecs.given
+import io.itbeans.ev.mongo.DomainBsonCodecs.{*, given}
 import org.bson.Document
 import org.mongodb.scala.MongoDatabase
 import org.mongodb.scala.model.Filters
@@ -47,6 +47,7 @@ final class MongoAssetRepository(db: MongoDatabase) extends AssetRepository:
     col(tenantId).deleteOne(Filters.eq("_id", id.value))
 
 object MongoAssetRepository:
+
   val live: ZLayer[MongoDatabase, Nothing, AssetRepository] =
     ZLayer.fromFunction(MongoAssetRepository(_))
 
@@ -83,6 +84,7 @@ final class MongoConnectionRepository(db: MongoDatabase) extends ConnectionRepos
     col(tenantId).deleteOne(Filters.eq("_id", id.value))
 
 object MongoConnectionRepository:
+
   val live: ZLayer[MongoDatabase, Nothing, ConnectionRepository] =
     ZLayer.fromFunction(MongoConnectionRepository(_))
 
@@ -127,5 +129,6 @@ final class MongoPricingDefinitionRepository(db: MongoDatabase) extends PricingD
     col(tenantId).deleteOne(Filters.eq("_id", id.value))
 
 object MongoPricingDefinitionRepository:
+
   val live: ZLayer[MongoDatabase, Nothing, PricingDefinitionRepository] =
     ZLayer.fromFunction(MongoPricingDefinitionRepository(_))

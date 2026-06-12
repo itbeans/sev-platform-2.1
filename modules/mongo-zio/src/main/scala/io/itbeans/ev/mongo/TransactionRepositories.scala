@@ -1,7 +1,7 @@
 package io.itbeans.ev.mongo
 
 import io.itbeans.ev.domain._
-import io.itbeans.ev.mongo.DomainBsonCodecs.given
+import io.itbeans.ev.mongo.DomainBsonCodecs.{*, given}
 import org.bson.Document
 import org.mongodb.scala.MongoDatabase
 import org.mongodb.scala.model.{Filters, Sorts}
@@ -51,6 +51,7 @@ final class MongoTransactionRepository(db: MongoDatabase) extends TransactionRep
     col(tx.tenantId).replaceOne(Filters.eq("_id", tx.id.value), encodeDoc(tx))
 
 object MongoTransactionRepository:
+
   val live: ZLayer[MongoDatabase, Nothing, TransactionRepository] =
     ZLayer.fromFunction(MongoTransactionRepository(_))
 
@@ -82,5 +83,6 @@ final class MongoConsumptionRepository(db: MongoDatabase) extends ConsumptionRep
       case Some(hd) => col(hd.tenantId).insertMany(cs.map(encodeDoc(_)))
 
 object MongoConsumptionRepository:
+
   val live: ZLayer[MongoDatabase, Nothing, ConsumptionRepository] =
     ZLayer.fromFunction(MongoConsumptionRepository(_))

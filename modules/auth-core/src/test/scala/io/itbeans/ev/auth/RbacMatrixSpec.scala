@@ -32,15 +32,15 @@ object RbacMatrixSpec extends ZIOSpecDefault:
 
   private def row(role: UserRole, r: Resource, l: Boolean, rd: Boolean, c: Boolean, d: Boolean): Vector[Row] =
     Vector(
-      (role, r, aList,   l),
-      (role, r, aRead,   rd),
+      (role, r, aList, l),
+      (role, r, aRead, rd),
       (role, r, aCreate, c),
       (role, r, aDelete, d)
     )
 
-  private def allAllow(role: UserRole, r: Resource)  = row(role, r, true,  true,  true,  true)
-  private def allDeny(role: UserRole, r: Resource)   = row(role, r, false, false, false, false)
-  private def readOnly(role: UserRole, r: Resource)  = row(role, r, true,  true,  false, false)
+  private def allAllow(role: UserRole, r: Resource) = row(role, r, true, true, true, true)
+  private def allDeny(role: UserRole, r: Resource)  = row(role, r, false, false, false, false)
+  private def readOnly(role: UserRole, r: Resource) = row(role, r, true, true, false, false)
 
   // ── Full 552-entry policy matrix ───────────────────────────────────────────
 
@@ -49,90 +49,163 @@ object RbacMatrixSpec extends ZIOSpecDefault:
 
     // ── SuperAdmin: unrestricted platform access ─────────────────────────────
     val superAdmin =
-      Vector(ChargingStation, ChargingStationTemplate, Connector, User, Tenant,
-             Site, SiteArea, Company, Transaction, Tag, Asset, ChargingProfile,
-             Car, CarCatalog, Invoice, PaymentMethod, BillingAccount,
-             Notification, Logging, Statistic, Report, Setting, OcpiEndpoint)
+      Vector(
+        ChargingStation,
+        ChargingStationTemplate,
+        Connector,
+        User,
+        Tenant,
+        Site,
+        SiteArea,
+        Company,
+        Transaction,
+        Tag,
+        Asset,
+        ChargingProfile,
+        Car,
+        CarCatalog,
+        Invoice,
+        PaymentMethod,
+        BillingAccount,
+        Notification,
+        Logging,
+        Statistic,
+        Report,
+        Setting,
+        OcpiEndpoint
+      )
         .flatMap(allAllow(SuperAdmin, _))
 
     // ── Admin: tenant-wide access; Tenant resource is SuperAdmin-only ────────
     val admin =
-      Vector(ChargingStation, ChargingStationTemplate, Connector, User,
-             Site, SiteArea, Company, Transaction, Tag, Asset, ChargingProfile,
-             Car, CarCatalog, Invoice, PaymentMethod, BillingAccount,
-             Notification, Logging, Statistic, Report, Setting, OcpiEndpoint)
+      Vector(
+        ChargingStation,
+        ChargingStationTemplate,
+        Connector,
+        User,
+        Site,
+        SiteArea,
+        Company,
+        Transaction,
+        Tag,
+        Asset,
+        ChargingProfile,
+        Car,
+        CarCatalog,
+        Invoice,
+        PaymentMethod,
+        BillingAccount,
+        Notification,
+        Logging,
+        Statistic,
+        Report,
+        Setting,
+        OcpiEndpoint
+      )
         .flatMap(allAllow(Admin, _)) ++
-      allDeny(Admin, Tenant)
+        allDeny(Admin, Tenant)
 
     // ── SiteAdmin: site-level management; no platform or OCPI admin ──────────
     val siteAdmin =
-      Vector(ChargingStation, Connector, User, Site, SiteArea, Transaction, Tag,
-             Asset, ChargingProfile, Car, CarCatalog, Invoice,
-             Notification, Logging, Statistic, Report)
+      Vector(
+        ChargingStation,
+        Connector,
+        User,
+        Site,
+        SiteArea,
+        Transaction,
+        Tag,
+        Asset,
+        ChargingProfile,
+        Car,
+        CarCatalog,
+        Invoice,
+        Notification,
+        Logging,
+        Statistic,
+        Report
+      )
         .flatMap(allAllow(SiteAdmin, _)) ++
-      readOnly(SiteAdmin, ChargingStationTemplate) ++
-      readOnly(SiteAdmin, BillingAccount) ++
-      readOnly(SiteAdmin, Setting) ++
-      allDeny(SiteAdmin, Tenant) ++
-      allDeny(SiteAdmin, Company) ++
-      allDeny(SiteAdmin, PaymentMethod) ++
-      allDeny(SiteAdmin, OcpiEndpoint)
+        readOnly(SiteAdmin, ChargingStationTemplate) ++
+        readOnly(SiteAdmin, BillingAccount) ++
+        readOnly(SiteAdmin, Setting) ++
+        allDeny(SiteAdmin, Tenant) ++
+        allDeny(SiteAdmin, Company) ++
+        allDeny(SiteAdmin, PaymentMethod) ++
+        allDeny(SiteAdmin, OcpiEndpoint)
 
     // ── SiteOwner: read-only access; no mutations on management resources ────
     val siteOwner =
-      Vector(ChargingStation, ChargingStationTemplate, Connector, User,
-             Site, SiteArea, Company, Transaction, Tag, Asset, ChargingProfile,
-             Car, CarCatalog, Invoice, BillingAccount, Notification,
-             Logging, Statistic, Report)
+      Vector(
+        ChargingStation,
+        ChargingStationTemplate,
+        Connector,
+        User,
+        Site,
+        SiteArea,
+        Company,
+        Transaction,
+        Tag,
+        Asset,
+        ChargingProfile,
+        Car,
+        CarCatalog,
+        Invoice,
+        BillingAccount,
+        Notification,
+        Logging,
+        Statistic,
+        Report
+      )
         .flatMap(readOnly(SiteOwner, _)) ++
-      allDeny(SiteOwner, Tenant) ++
-      allDeny(SiteOwner, PaymentMethod) ++
-      allDeny(SiteOwner, Setting) ++
-      allDeny(SiteOwner, OcpiEndpoint)
+        allDeny(SiteOwner, Tenant) ++
+        allDeny(SiteOwner, PaymentMethod) ++
+        allDeny(SiteOwner, Setting) ++
+        allDeny(SiteOwner, OcpiEndpoint)
 
     // ── Basic: own data only; no tenant/site/admin resources ─────────────────
     val basic =
       Vector(Site, SiteArea, Connector, CarCatalog, Transaction)
         .flatMap(readOnly(Basic, _)) ++
-      allAllow(Basic, Car) ++
-      row(Basic, ChargingStation, true,  true,  false, false) ++ // List + Read (own sessions)
-      row(Basic, User,            false, true,  false, false) ++ // Read own profile; cannot list all
-      row(Basic, Tag,             true,  true,  false, false) ++ // List + Read own tags (Assign/Unassign via custom actions)
-      row(Basic, Invoice,         true,  true,  false, false) ++ // List + Read own invoices
-      row(Basic, PaymentMethod,   true,  true,  true,  true)  ++ // Full CRUD on own payment methods
-      allDeny(Basic, Tenant) ++
-      allDeny(Basic, ChargingStationTemplate) ++
-      allDeny(Basic, Company) ++
-      allDeny(Basic, Asset) ++
-      allDeny(Basic, ChargingProfile) ++
-      allDeny(Basic, BillingAccount) ++
-      allDeny(Basic, Notification) ++
-      allDeny(Basic, Logging) ++
-      allDeny(Basic, Statistic) ++
-      allDeny(Basic, Report) ++
-      allDeny(Basic, Setting) ++
-      allDeny(Basic, OcpiEndpoint)
+        allAllow(Basic, Car) ++
+        row(Basic, ChargingStation, true, true, false, false) ++ // List + Read (own sessions)
+        row(Basic, User, false, true, false, false) ++           // Read own profile; cannot list all
+        row(Basic, Tag, true, true, false, false) ++     // List + Read own tags (Assign/Unassign via custom actions)
+        row(Basic, Invoice, true, true, false, false) ++ // List + Read own invoices
+        row(Basic, PaymentMethod, true, true, true, true) ++ // Full CRUD on own payment methods
+        allDeny(Basic, Tenant) ++
+        allDeny(Basic, ChargingStationTemplate) ++
+        allDeny(Basic, Company) ++
+        allDeny(Basic, Asset) ++
+        allDeny(Basic, ChargingProfile) ++
+        allDeny(Basic, BillingAccount) ++
+        allDeny(Basic, Notification) ++
+        allDeny(Basic, Logging) ++
+        allDeny(Basic, Statistic) ++
+        allDeny(Basic, Report) ++
+        allDeny(Basic, Setting) ++
+        allDeny(Basic, OcpiEndpoint)
 
     // ── Demo: read-only on public resources; everything else denied ───────────
     val demo =
       Vector(ChargingStation, Site, SiteArea, Connector, Transaction, Statistic, CarCatalog)
         .flatMap(readOnly(Demo, _)) ++
-      allDeny(Demo, User) ++
-      allDeny(Demo, Tenant) ++
-      allDeny(Demo, ChargingStationTemplate) ++
-      allDeny(Demo, Company) ++
-      allDeny(Demo, Tag) ++
-      allDeny(Demo, Asset) ++
-      allDeny(Demo, ChargingProfile) ++
-      allDeny(Demo, Car) ++
-      allDeny(Demo, Invoice) ++
-      allDeny(Demo, PaymentMethod) ++
-      allDeny(Demo, BillingAccount) ++
-      allDeny(Demo, Notification) ++
-      allDeny(Demo, Logging) ++
-      allDeny(Demo, Report) ++
-      allDeny(Demo, Setting) ++
-      allDeny(Demo, OcpiEndpoint)
+        allDeny(Demo, User) ++
+        allDeny(Demo, Tenant) ++
+        allDeny(Demo, ChargingStationTemplate) ++
+        allDeny(Demo, Company) ++
+        allDeny(Demo, Tag) ++
+        allDeny(Demo, Asset) ++
+        allDeny(Demo, ChargingProfile) ++
+        allDeny(Demo, Car) ++
+        allDeny(Demo, Invoice) ++
+        allDeny(Demo, PaymentMethod) ++
+        allDeny(Demo, BillingAccount) ++
+        allDeny(Demo, Notification) ++
+        allDeny(Demo, Logging) ++
+        allDeny(Demo, Report) ++
+        allDeny(Demo, Setting) ++
+        allDeny(Demo, OcpiEndpoint)
 
     superAdmin ++ admin ++ siteAdmin ++ siteOwner ++ basic ++ demo
   }
@@ -170,7 +243,6 @@ object RbacMatrixSpec extends ZIOSpecDefault:
   // ── Spec ───────────────────────────────────────────────────────────────────
 
   override def spec = suite("RbacMatrixSpec")(
-
     test(s"full 6-role × 23-resource × 4-action matrix (${matrix.size} entries)") {
       ZIO.serviceWith[AuthorizationService] { svc =>
         ZIO.foreach(matrix) { case (role, resource, action, expectedAllow) =>
@@ -185,5 +257,4 @@ object RbacMatrixSpec extends ZIOSpecDefault:
         }
       }.flatten
     }
-
   ).provide(CasbinAuthorizationService.live)

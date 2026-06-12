@@ -118,9 +118,39 @@ object ProcessorGatewayClient:
 // ── Pricing client ────────────────────────────────────────────────────────────
 
 trait ProcessorPricingClient:
-  def resolvePricing(tenantId: String, stationId: String, connectorId: String, connectorType: String, connectorPowerKw: Double, userId: String, startTimestampMs: Long): Task[ResolvePricingResponse]
-  def priceConsumption(tenantId: String, txId: String, pricingModelJson: String, consumptionWh: Double, instantWatts: Double, connectorType: String, connectorPowerKw: Double, intervalStartMs: Long, intervalEndMs: Long): Task[PriceConsumptionResponse]
-  def finalisePrice(tenantId: String, txId: String, pricingModelJson: String, totalConsumptionWh: Double, connectorType: String, connectorPowerKw: Double, startTimestampMs: Long, endTimestampMs: Long): Task[FinalisePriceResponse]
+
+  def resolvePricing(
+      tenantId: String,
+      stationId: String,
+      connectorId: String,
+      connectorType: String,
+      connectorPowerKw: Double,
+      userId: String,
+      startTimestampMs: Long
+  ): Task[ResolvePricingResponse]
+
+  def priceConsumption(
+      tenantId: String,
+      txId: String,
+      pricingModelJson: String,
+      consumptionWh: Double,
+      instantWatts: Double,
+      connectorType: String,
+      connectorPowerKw: Double,
+      intervalStartMs: Long,
+      intervalEndMs: Long
+  ): Task[PriceConsumptionResponse]
+
+  def finalisePrice(
+      tenantId: String,
+      txId: String,
+      pricingModelJson: String,
+      totalConsumptionWh: Double,
+      connectorType: String,
+      connectorPowerKw: Double,
+      startTimestampMs: Long,
+      endTimestampMs: Long
+  ): Task[FinalisePriceResponse]
 
 final class LiveProcessorPricingClient(stub: PricingServiceGrpc.PricingServiceStub)
     extends ProcessorPricingClient:

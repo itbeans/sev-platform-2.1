@@ -43,9 +43,10 @@ final class CrossPodCommandRelay(
   /** Called by OcppGatewayGrpcTransport when the station is not locally connected. */
   def relay(req: SendCommandRequest): UIO[SendCommandResponse] =
     val correlationId = if req.correlationId.nonEmpty then req.correlationId
-                        else UUID.randomUUID().toString
-    val timeoutMs = (if req.timeoutSeconds > 0 then req.timeoutSeconds * 1000L
-                     else cfg.responseTimeoutMs) + 3000L // extra headroom for Kafka round-trip
+    else UUID.randomUUID().toString
+    val timeoutMs =
+      (if req.timeoutSeconds > 0 then req.timeoutSeconds * 1000L
+       else cfg.responseTimeoutMs) + 3000L // extra headroom for Kafka round-trip
 
     for
       promise <- Promise.make[Throwable, SendCommandResponse]
@@ -60,21 +61,29 @@ final class CrossPodCommandRelay(
       )
       tenantId = TenantId(req.tenantId)
       _ <- producer.publish(Topics.ocppCommands(tenantId), req.chargingStationId, msg)
-            .catchAll(err =>
-              ZIO.logError(s"[CrossPodRelay] Failed to publish relay command: ${err.getMessage}")
-            )
+        .catchAll(err =>
+          ZIO.logError(s"[CrossPodRelay] Failed to publish relay command: ${err.getMessage}")
+        )
       result <- promise.await
         .timeout(Duration.fromMillis(timeoutMs))
         .flatMap {
           case None =>
             pendingRelays.update(_ - correlationId) *>
               ZIO.succeed(SendCommandResponse(
-                delivered    = false,
-                errorCode    = "RelayTimeout",
+                delivered = false,
+                errorCode = "RelayTimeout",
                 errorMessage = s"No relay response within ${timeoutMs}ms"
               ))
           case Some(resp) => ZIO.succeed(resp)
         }
+        .catchAll(err =>
+          pendingRelays.update(_ - correlationId) *>
+            ZIO.succeed(SendCommandResponse(
+              delivered = false,
+              errorCode = "RelayError",
+              errorMessage = err.getMessage
+            ))
+        )
     yield result
 
   /** Consumes ocpp.commands.* — executes commands for locally-connected stations. */
@@ -121,21 +130,25 @@ final class CrossPodCommandRelay(
 
   private def handleInboundRelayCommand(json: String): Task[Unit] =
     for
-      obj           <- ZIO.fromEither(parse(json)).mapError(e => new Exception(e.message))
-      cursor         = obj.hcursor
+      obj <- ZIO.fromEither(parse(json)).mapError(e => new Exception(e.message))
+      cursor = obj.hcursor
       correlationId <- ZIO.fromEither(cursor.get[String]("correlationId"))
       tenantId      <- ZIO.fromEither(cursor.get[String]("tenantId"))
       stationId     <- ZIO.fromEither(cursor.get[String]("chargingStationId"))
       action        <- ZIO.fromEither(cursor.get[String]("action"))
       payloadJson   <- ZIO.fromEither(cursor.get[String]("payloadJson"))
-      timeoutSecs    = cursor.get[Int]("timeoutSeconds").getOrElse(0)
-      key            = ConnectionKey(TenantId(tenantId), ChargingStationId(stationId))
-      entryOpt      <- registry.get(key)
+      timeoutSecs = cursor.get[Int]("timeoutSeconds").getOrElse(0)
+      key         = ConnectionKey(TenantId(tenantId), ChargingStationId(stationId))
+      entryOpt <- registry.get(key)
       _ <- entryOpt match
-        case None  => ZIO.unit // station not on this pod — another pod will handle it
+        case None => ZIO.unit // station not on this pod — another pod will handle it
         case Some(_) =>
           executeLocalAndPublishResponse(
-            key, correlationId, action, payloadJson, timeoutSecs
+            key,
+            correlationId,
+            action,
+            payloadJson,
+            timeoutSecs
           )
     yield ()
 
@@ -167,28 +180,44 @@ final class CrossPodCommandRelay(
             .either
           responseMsg <- sent match
             case Left(err) =>
-              ZIO.succeed(buildResponseMsg(correlationId, delivered = false,
-                errorCode = "SendError", errorMessage = err.getMessage, responseJson = ""))
+              ZIO.succeed(buildResponseMsg(
+                correlationId,
+                delivered = false,
+                errorCode = "SendError",
+                errorMessage = err.getMessage,
+                responseJson = ""
+              ))
             case Right(_) =>
               promise.await
                 .timeout(Duration.fromMillis(timeoutMs))
                 .flatMap {
                   case None =>
                     frameHandler.removePending(correlationId) *>
-                      ZIO.succeed(buildResponseMsg(correlationId, delivered = false,
+                      ZIO.succeed(buildResponseMsg(
+                        correlationId,
+                        delivered = false,
                         errorCode = "Timeout",
                         errorMessage = s"No response from station within ${timeoutMs}ms",
-                        responseJson = ""))
+                        responseJson = ""
+                      ))
                   case Some(ocppFrame) => ocppFrame match
-                    case r: OcppCallResultFrame =>
-                      ZIO.succeed(buildResponseMsg(correlationId, delivered = true,
-                        responseJson = r.payloadJson))
-                    case e: OcppCallErrorFrame =>
-                      ZIO.succeed(buildResponseMsg(correlationId, delivered = true,
-                        errorCode = e.errorCode, errorMessage = e.errorDescription, responseJson = ""))
-                    case _ =>
-                      ZIO.succeed(buildResponseMsg(correlationId, delivered = false,
-                        errorCode = "UnexpectedFrame", responseJson = ""))
+                      case r: OcppCallResultFrame =>
+                        ZIO.succeed(buildResponseMsg(correlationId, delivered = true, responseJson = r.payloadJson))
+                      case e: OcppCallErrorFrame =>
+                        ZIO.succeed(buildResponseMsg(
+                          correlationId,
+                          delivered = true,
+                          errorCode = e.errorCode,
+                          errorMessage = e.errorDescription,
+                          responseJson = ""
+                        ))
+                      case _ =>
+                        ZIO.succeed(buildResponseMsg(
+                          correlationId,
+                          delivered = false,
+                          errorCode = "UnexpectedFrame",
+                          responseJson = ""
+                        ))
                 }
           _ <- producer.publish(Topics.ocppCommandResponses, correlationId, responseMsg)
         yield ()
@@ -197,7 +226,7 @@ final class CrossPodCommandRelay(
   private def buildResponseMsg(
       correlationId: String,
       delivered: Boolean,
-      errorCode: String    = "",
+      errorCode: String = "",
       errorMessage: String = "",
       responseJson: String = ""
   ): Json =
@@ -213,16 +242,16 @@ final class CrossPodCommandRelay(
 
   private def handleRelayResponse(json: String): Task[Unit] =
     for
-      obj           <- ZIO.fromEither(parse(json)).mapError(e => new Exception(e.message))
-      cursor         = obj.hcursor
+      obj <- ZIO.fromEither(parse(json)).mapError(e => new Exception(e.message))
+      cursor = obj.hcursor
       correlationId <- ZIO.fromEither(cursor.get[String]("correlationId"))
       promiseOpt    <- pendingRelays.get.map(_.get(correlationId))
       _ <- promiseOpt match
         case None => ZIO.unit // this correlationId belongs to another pod
         case Some(promise) =>
           val resp = SendCommandResponse(
-            delivered    = cursor.get[Boolean]("delivered").getOrElse(false),
-            errorCode    = cursor.get[String]("errorCode").getOrElse(""),
+            delivered = cursor.get[Boolean]("delivered").getOrElse(false),
+            errorCode = cursor.get[String]("errorCode").getOrElse(""),
             errorMessage = cursor.get[String]("errorMessage").getOrElse(""),
             responseJson = cursor.get[String]("responseJson").getOrElse("")
           )

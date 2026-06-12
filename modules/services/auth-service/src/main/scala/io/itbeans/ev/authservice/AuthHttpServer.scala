@@ -6,6 +6,7 @@ import sttp.tapir.server.ziohttp.ZioHttpInterpreter
 import sttp.tapir.ztapir._
 import zio._
 import zio.http.{Response, Routes}
+import zio.metrics.Metric
 
 import java.time.{Instant, ZoneOffset, ZonedDateTime}
 
@@ -32,7 +33,7 @@ object AuthHttpServer:
       parallelRunSvc: Option[ParallelRunService],
       cfg: AuthConfig
   ): Routes[Any, Response] =
-    val coreEndpoints = List(
+    val coreEndpoints: List[ZServerEndpoint[Any, Any]] = List(
       AuthEndpoints.signIn.zServerLogic { body =>
         signIn(body, userRepo, tenantRepo, tokenSvc, cfg).mapError(_.getMessage)
       },
@@ -45,8 +46,8 @@ object AuthHttpServer:
           .catchAll(_ => ZIO.succeed(CheckTokenResponse(valid = false, userTokenJson = None)))
       }
     )
-    val parallelRunEndpoints = parallelRunSvc.toList.flatMap { svc =>
-      List(
+    val parallelRunEndpoints: List[ZServerEndpoint[Any, Any]] = parallelRunSvc.toList.flatMap { svc =>
+      List[ZServerEndpoint[Any, Any]](
         ParallelRunEndpoints.compare.zServerLogic { req =>
           svc.compare(req.tenant, req.email, req.tsToken)
             .map(r => ParallelRunCompareResponse(r.matched, r.diffCount, r.diffs))

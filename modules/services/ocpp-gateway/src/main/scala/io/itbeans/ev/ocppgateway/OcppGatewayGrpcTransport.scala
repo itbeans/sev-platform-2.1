@@ -48,8 +48,8 @@ final class OcppGatewayGrpcTransport(
     run("gateway.isStationConnected")(doIsStationConnected(req))
 
   private def doSendCommand(req: SendCommandRequest): UIO[SendCommandResponse] =
-    val key      = ConnectionKey(TenantId(req.tenantId), ChargingStationId(req.chargingStationId))
-    val uniqueId = if req.correlationId.nonEmpty then req.correlationId else java.util.UUID.randomUUID().toString
+    val key       = ConnectionKey(TenantId(req.tenantId), ChargingStationId(req.chargingStationId))
+    val uniqueId  = if req.correlationId.nonEmpty then req.correlationId else java.util.UUID.randomUUID().toString
     val timeoutMs = if req.timeoutSeconds > 0 then req.timeoutSeconds * 1000L else cfg.responseTimeoutMs
 
     registry.get(key).flatMap {

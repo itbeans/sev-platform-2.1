@@ -29,7 +29,7 @@ object EvTracing:
   val noop: ULayer[EvTracing] = ZLayer.succeed {
     new EvTracing:
       def span[R, E, A](name: String, attributes: (String, String)*)(effect: ZIO[R, E, A]): ZIO[R, E, A] = effect
-      def spanTask[A](name: String, attributes: (String, String)*)(effect: Task[A]): Task[A] = effect
+      def spanTask[A](name: String, attributes: (String, String)*)(effect: Task[A]): Task[A]             = effect
   }
 
   val live: ZLayer[OpenTelemetry, Nothing, EvTracing] =

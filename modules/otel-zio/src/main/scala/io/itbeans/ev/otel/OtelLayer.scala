@@ -6,7 +6,7 @@ import io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter
 import io.opentelemetry.sdk.OpenTelemetrySdk
 import io.opentelemetry.sdk.resources.Resource
 import io.opentelemetry.sdk.trace.SdkTracerProvider
-import io.opentelemetry.sdk.trace.export.BatchSpanProcessor
+import io.opentelemetry.sdk.trace.`export`.BatchSpanProcessor
 import zio._
 
 // ---------------------------------------------------------------------------
@@ -14,10 +14,6 @@ import zio._
 //
 // When otel.enabled=false the layer returns OpenTelemetry.noop() so spans
 // are created but immediately discarded, with zero performance overhead.
-//
-// The opentelemetry-zio-2.0 artifact (on the classpath) registers a ZIO
-// fiber-local ContextStorageProvider via ServiceLoader so that span context
-// propagates correctly across ZIO fork/flatMap boundaries.
 // ---------------------------------------------------------------------------
 
 object OtelLayer:
@@ -37,7 +33,7 @@ object OtelLayer:
               val exporter = OtlpGrpcSpanExporter.builder()
                 .setEndpoint(cfg.otlpEndpoint)
                 .build()
-              val processor     = BatchSpanProcessor.builder(exporter).build()
+              val processor = BatchSpanProcessor.builder(exporter).build()
               val tracerProvider = SdkTracerProvider.builder()
                 .setResource(resource)
                 .addSpanProcessor(processor)

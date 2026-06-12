@@ -3,6 +3,8 @@ package io.itbeans.ev.billingservice
 import io.circe.Json
 import io.circe.parser.decode
 import io.circe.syntax._
+import io.itbeans.ev.billing.grpc.billing_service._
+import io.itbeans.ev.otel.EvTracing
 import zio._
 import zio.test._
 import zio.test.Assertion._
@@ -30,10 +32,12 @@ object BillingServiceSpec extends ZIOSpecDefault:
     startDate = Some(now),
     endDate = Some(oneHour),
     totalDurationSecs = Some(3600L),
+    totalInactivitySecs = None,
     consumptionWh = Some(15000.0),
     priceUnit = Some("EUR"),
     totalCost = Some(3.75),
-    pricingId = None
+    pricingId = None,
+    invoiceItemJson = None
   )
 
   private val testInvoice = Invoice(
@@ -245,6 +249,12 @@ object BillingServiceSpec extends ZIOSpecDefault:
     def createAccountLink(accountId: String, refreshUrl: String, returnUrl: String): Task[Json] =
       ZIO.succeed(Json.obj("url" -> Json.fromString("https://stripe.com/onboard")))
 
+    def retrieveAccount(accountId: String): Task[Json] =
+      ZIO.succeed(Json.obj(
+        "id"              -> Json.fromString(accountId),
+        "charges_enabled" -> Json.fromBoolean(true)
+      ))
+
     def createTransfer(amountCents: Int, currency: String, dest: String, desc: String): Task[Json] =
       ZIO.succeed(Json.obj("id" -> Json.fromString("tr_stub")))
 
@@ -260,6 +270,22 @@ object BillingServiceSpec extends ZIOSpecDefault:
       cfg: BillingConfig = testCfg
   ): LiveBillingService =
     new LiveBillingService(stripe, invoiceRepo, userRepo, transferRepo, accountRepo, cfg)
+
+  class StubBillingGrpcHandler extends BillingGrpcHandler:
+    def getInvoices(req: GetInvoicesRequestADT): Task[GetInvoicesResponseADT] = ZIO.succeed(GetInvoicesResponseADT(Nil))
+
+    def createBillingUser(req: CreateBillingUserRequestADT): Task[CreateBillingUserResponseADT] =
+      ZIO.succeed(CreateBillingUserResponseADT(BillingUserSummaryADT(req.userId, "cus_stub")))
+
+    def checkPaymentMethods(req: CheckPaymentMethodsRequestADT): Task[CheckPaymentMethodsResponseADT] =
+      ZIO.succeed(CheckPaymentMethodsResponseADT(Nil, hasDefault = false))
+
+    def chargeInvoice(req: ChargeInvoiceRequestADT): Task[ChargeInvoiceResponseADT] =
+      ZIO.fail(new Exception("not used"))
+
+  private val noopTracing = new EvTracing:
+    def span[R, E, A](name: String, attributes: (String, String)*)(effect: ZIO[R, E, A]): ZIO[R, E, A] = effect
+    def spanTask[A](name: String, attributes: (String, String)*)(effect: Task[A]): Task[A]             = effect
 
   // ── Tests ─────────────────────────────────────────────────────────────────
 
@@ -532,6 +558,189 @@ object BillingServiceSpec extends ZIOSpecDefault:
         for
           invoice <- svc.createInvoiceForSession(tenantId, payload)
         yield assertTrue(invoice.sessions.flatMap(_.dimensions).isEmpty)
+      }
+    ),
+
+    // ── BillingGrpcTransport — 4 previously-stubbed endpoints ─────────────
+
+    suite("BillingGrpcTransport billing account + transfer endpoints")(
+      test("onboardBillingAccount creates account and returns Stripe activation link") {
+        val userRepo    = new MemBillingUserRepository
+        val accountRepo = new MemBillingAccountRepository
+        val stripe      = new StubStripeClient
+        userRepo.seed(BillingUser(userId, tenantId, "cus_test", None, now))
+        for
+          rt <- ZIO.runtime[Any]
+          billing = makeBillingService(stripe = stripe, userRepo = userRepo, accountRepo = accountRepo)
+          transport = new BillingGrpcTransport(
+            new StubBillingGrpcHandler,
+            billing,
+            new MemInvoiceRepository,
+            userRepo,
+            accountRepo,
+            new MemBillingTransferRepository,
+            stripe,
+            testCfg,
+            noopTracing,
+            rt
+          )
+          resp <- ZIO.fromFuture(_ =>
+            transport.onboardBillingAccount(
+              OnboardBillingAccountRequest(
+                tenantId = tenantId,
+                businessOwnerId = userId,
+                returnUrl = "https://app.example.com/return"
+              )
+            )
+          )
+          stored <- accountRepo.findByOwner(tenantId, userId)
+        yield assertTrue(resp.success) &&
+          assertTrue(resp.activationLink == "https://stripe.com/onboard") &&
+          assertTrue(stored.isDefined) &&
+          assertTrue(stored.flatMap(_.accountExternalId).contains("acct_stub"))
+      },
+      test("activateBillingAccount marks account Active when charges_enabled") {
+        val accountRepo = new MemBillingAccountRepository
+        val stripe      = new StubStripeClient // retrieveAccount returns charges_enabled=true
+        val account = BillingAccount(
+          id = "acc-1",
+          tenantId = tenantId,
+          businessOwnerUserId = userId,
+          companyName = "Test Co",
+          status = BillingAccountStatus.Pending,
+          accountExternalId = Some("acct_stub"),
+          activationLink = Some("https://stripe.com/old"),
+          createdOn = now,
+          createdBy = userId
+        )
+        for
+          _  <- accountRepo.create(account)
+          rt <- ZIO.runtime[Any]
+          billing = makeBillingService(stripe = stripe, accountRepo = accountRepo)
+          transport = new BillingGrpcTransport(
+            new StubBillingGrpcHandler,
+            billing,
+            new MemInvoiceRepository,
+            new MemBillingUserRepository,
+            accountRepo,
+            new MemBillingTransferRepository,
+            stripe,
+            testCfg,
+            noopTracing,
+            rt
+          )
+          resp <- ZIO.fromFuture(_ =>
+            transport.activateBillingAccount(
+              ActivateBillingAccountRequest(
+                tenantId = tenantId,
+                accountId = "acc-1",
+                returnUrl = "https://app.example.com/return"
+              )
+            )
+          )
+          stored <- accountRepo.findById(tenantId, "acc-1")
+        yield assertTrue(resp.success) &&
+          assertTrue(resp.status == "active") &&
+          assertTrue(stored.exists(_.status == BillingAccountStatus.Active))
+      },
+      test("finalizeTransfer transitions a Draft transfer to Finalized") {
+        val transferRepo = new MemBillingTransferRepository
+        val transfer = BillingTransfer(
+          id = "tr-1",
+          tenantId = tenantId,
+          accountId = "acc-1",
+          accountExternalId = "acct_stub",
+          status = TransferStatus.Draft,
+          currency = "eur",
+          sessionCounter = 5,
+          collectedFundsCents = 1000,
+          collectedFeesCents = 25,
+          transferAmountCents = 975,
+          transferExternalId = None,
+          createdOn = now,
+          lastChangedOn = now
+        )
+        for
+          _  <- transferRepo.create(transfer)
+          rt <- ZIO.runtime[Any]
+          billing = makeBillingService(transferRepo = transferRepo)
+          transport = new BillingGrpcTransport(
+            new StubBillingGrpcHandler,
+            billing,
+            new MemInvoiceRepository,
+            new MemBillingUserRepository,
+            new MemBillingAccountRepository,
+            transferRepo,
+            new StubStripeClient,
+            testCfg,
+            noopTracing,
+            rt
+          )
+          resp <- ZIO.fromFuture(_ =>
+            transport.finalizeTransfer(
+              FinalizeTransferRequest(tenantId = tenantId, transferId = "tr-1")
+            )
+          )
+          stored <- transferRepo.findById(tenantId, "tr-1")
+        yield assertTrue(resp.success) &&
+          assertTrue(resp.status == "finalized") &&
+          assertTrue(stored.exists(_.status == TransferStatus.Finalized))
+      },
+      test("sendTransfer dispatches a Finalized transfer to Stripe") {
+        val accountRepo  = new MemBillingAccountRepository
+        val transferRepo = new MemBillingTransferRepository
+        val stripe       = new StubStripeClient
+        val account = BillingAccount(
+          id = "acc-1",
+          tenantId = tenantId,
+          businessOwnerUserId = userId,
+          companyName = "Test Co",
+          status = BillingAccountStatus.Active,
+          accountExternalId = Some("acct_stub"),
+          activationLink = None,
+          createdOn = now,
+          createdBy = userId
+        )
+        val transfer = BillingTransfer(
+          id = "tr-1",
+          tenantId = tenantId,
+          accountId = "acc-1",
+          accountExternalId = "acct_stub",
+          status = TransferStatus.Finalized,
+          currency = "eur",
+          sessionCounter = 5,
+          collectedFundsCents = 1000,
+          collectedFeesCents = 25,
+          transferAmountCents = 975,
+          transferExternalId = None,
+          createdOn = now,
+          lastChangedOn = now
+        )
+        for
+          _  <- accountRepo.create(account)
+          _  <- transferRepo.create(transfer)
+          rt <- ZIO.runtime[Any]
+          billing = makeBillingService(stripe = stripe, accountRepo = accountRepo, transferRepo = transferRepo)
+          transport = new BillingGrpcTransport(
+            new StubBillingGrpcHandler,
+            billing,
+            new MemInvoiceRepository,
+            new MemBillingUserRepository,
+            accountRepo,
+            transferRepo,
+            stripe,
+            testCfg,
+            noopTracing,
+            rt
+          )
+          resp <- ZIO.fromFuture(_ =>
+            transport.sendTransfer(
+              SendTransferRequest(tenantId = tenantId, transferId = "tr-1")
+            )
+          )
+        yield assertTrue(resp.success) &&
+          assertTrue(resp.transferExternalId == "tr_stub") &&
+          assertTrue(resp.status == "transferred")
       }
     )
   )

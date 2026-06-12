@@ -18,10 +18,10 @@ object PricingId:
 
 // The level at which a pricing rule is attached
 enum PricingEntity(val code: String):
-  case Tenant         extends PricingEntity("T")
-  case Company        extends PricingEntity("C")
-  case Site           extends PricingEntity("S")
-  case SiteArea       extends PricingEntity("SA")
+  case Tenant               extends PricingEntity("T")
+  case Company              extends PricingEntity("C")
+  case Site                 extends PricingEntity("S")
+  case SiteArea             extends PricingEntity("SA")
   case ChargingStationLevel extends PricingEntity("CS")
 
 enum PricingDayOfWeek(val isoValue: Int):
@@ -58,8 +58,8 @@ case class PricingStaticRestriction(
 // Dynamic restrictions per session (day-of-week, time-of-day, energy thresholds)
 case class PricingRestriction(
     daysOfWeek: List[PricingDayOfWeek],
-    timeFrom: Option[String],   // "HH:mm"
-    timeTo: Option[String],     // "HH:mm"
+    timeFrom: Option[String], // "HH:mm"
+    timeTo: Option[String],   // "HH:mm"
     minEnergyKwh: Option[Double],
     maxEnergyKwh: Option[Double],
     minDurationSecs: Option[Int],
@@ -83,10 +83,10 @@ case class PricingDefinition(
 )
 
 object Pricing:
-  given Schema[PricingEntity]           = DeriveSchema.gen
-  given Schema[PricingDayOfWeek]        = DeriveSchema.gen
-  given Schema[PricingDimension]        = DeriveSchema.gen
-  given Schema[PricingDimensions]       = DeriveSchema.gen
+  given Schema[PricingEntity] = DeriveSchema.gen
+  given Schema[PricingDayOfWeek] = DeriveSchema.gen
+  given Schema[PricingDimension] = DeriveSchema.gen
+  given Schema[PricingDimensions] = DeriveSchema.gen
   given Schema[PricingStaticRestriction] = DeriveSchema.gen
-  given Schema[PricingRestriction]      = DeriveSchema.gen
-  given Schema[PricingDefinition]       = DeriveSchema.gen
+  given Schema[PricingRestriction] = DeriveSchema.gen
+  given Schema[PricingDefinition] = DeriveSchema.gen

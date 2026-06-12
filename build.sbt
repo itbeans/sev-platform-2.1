@@ -131,10 +131,7 @@ lazy val ocppProcessor = serviceProject("ocpp-processor", "ocpp-processor")
 // Dashboard REST API (Tapir endpoints)
 lazy val restApi = serviceProject("rest-api", "rest-api")
   .settings(
-    libraryDependencies ++= grpcDeps ++ Seq(
-      pact4sZioTest % Test,
-      pact4sCirce   % Test,
-    ),
+    libraryDependencies ++= grpcDeps,
     dockerExposedPorts := Seq(80, 443, 9090),
   )
   .dependsOn(proto)
@@ -150,13 +147,12 @@ lazy val authService = serviceProject("auth-service", "auth-service")
 // Stripe billing integration
 lazy val billingService = serviceProject("billing-service", "billing-service")
   .settings(
-    libraryDependencies ++= Seq(
+    libraryDependencies ++= grpcDeps ++ Seq(
       doobieCore, doobiePostgres, doobieHikari,
-      pact4sZioTest % Test,
-      pact4sCirce   % Test,
     ),
-    dockerExposedPorts := Seq(8080),
+    dockerExposedPorts := Seq(8080, 9090),
   )
+  .dependsOn(proto)
 
 // Tariff engine — gRPC server
 lazy val pricingService = serviceProject("pricing-service", "pricing-service")
@@ -168,6 +164,8 @@ lazy val pricingService = serviceProject("pricing-service", "pricing-service")
 
 // SAP Smart Charging + OCPP 2.1 DER Control
 lazy val smartCharging = serviceProject("smart-charging", "smart-charging")
+  .settings(libraryDependencies ++= grpcDeps)
+  .dependsOn(proto)
 
 // Email + Firebase push notifications (Kafka consumer only)
 lazy val notification = serviceProject("notification", "notification")

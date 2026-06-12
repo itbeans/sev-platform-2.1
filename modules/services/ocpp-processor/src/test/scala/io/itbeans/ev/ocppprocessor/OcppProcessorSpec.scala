@@ -4,6 +4,11 @@ import io.circe.Encoder
 import io.itbeans.ev.auth.grpc.auth_service.OcppAuthorizationResponse
 import io.itbeans.ev.domain._
 import io.itbeans.ev.ocpp.grpc.ocpp_gateway.{SendCommandResponse, SendResponseAck}
+import io.itbeans.ev.pricing.grpc.pricing_service.{
+  FinalisePriceResponse,
+  PriceConsumptionResponse,
+  ResolvePricingResponse
+}
 import org.bson.Document
 import zio._
 import zio.test._
@@ -35,6 +40,9 @@ object OcppProcessorSpec extends ZIOSpecDefault:
         stations = stations.filterNot(d => d.getString("_id") == stationId)
         stations = doc.append("_id", stationId) :: stations
       }
+
+    def getStation(tenantId: String, stationId: String): Task[Option[Document]] =
+      ZIO.succeed(stations.find(_.getString("_id") == stationId))
 
     def updateConnectorStatus(
         tenantId: String,
@@ -110,6 +118,44 @@ object OcppProcessorSpec extends ZIOSpecDefault:
     ): Task[SendResponseAck] =
       ZIO.succeed(SendResponseAck(delivered = true))
 
+  object NoOpPricingClient extends ProcessorPricingClient:
+
+    def resolvePricing(
+        tenantId: String,
+        stationId: String,
+        connectorId: String,
+        connectorType: String,
+        connectorPowerKw: Double,
+        userId: String,
+        startTimestampMs: Long
+    ): Task[ResolvePricingResponse] =
+      ZIO.succeed(ResolvePricingResponse())
+
+    def priceConsumption(
+        tenantId: String,
+        txId: String,
+        pricingModelJson: String,
+        consumptionWh: Double,
+        instantWatts: Double,
+        connectorType: String,
+        connectorPowerKw: Double,
+        intervalStartMs: Long,
+        intervalEndMs: Long
+    ): Task[PriceConsumptionResponse] =
+      ZIO.succeed(PriceConsumptionResponse())
+
+    def finalisePrice(
+        tenantId: String,
+        txId: String,
+        pricingModelJson: String,
+        totalConsumptionWh: Double,
+        connectorType: String,
+        connectorPowerKw: Double,
+        startTimestampMs: Long,
+        endTimestampMs: Long
+    ): Task[FinalisePriceResponse] =
+      ZIO.succeed(FinalisePriceResponse())
+
   // ── Fixtures ──────────────────────────────────────────────────────────────
 
   val t1       = TenantId("t1")
@@ -123,7 +169,7 @@ object OcppProcessorSpec extends ZIOSpecDefault:
     )
 
   def makeProcessor(repo: InMemoryProcessorRepository, prod: InMemoryKafkaProducer): OcppEventProcessor =
-    new OcppEventProcessor(repo, prod, kafkaConfig, NoOpAuthClient, NoOpGatewayClient)
+    new OcppEventProcessor(repo, prod, kafkaConfig, NoOpAuthClient, NoOpGatewayClient, NoOpPricingClient)
 
   // ── Tests ─────────────────────────────────────────────────────────────────
 
@@ -154,12 +200,24 @@ object OcppProcessorSpec extends ZIOSpecDefault:
         val repo = new InMemoryProcessorRepository
         val prod = new InMemoryKafkaProducer
         val proc = makeProcessor(repo, prod)
+        // Trigger is published only for stations assigned to a site area
+        repo.stations = List(new Document("_id", stationA.value).append("siteAreaId", "sa-001"))
         val json = """{"action":"StatusNotification","payload":{"connectorId":1,"connectorStatus":"Occupied"}}"""
         for
           _ <- proc.processRecord(stationA.value, json, s"ocpp.events.${t1.value}")
         yield assertTrue(repo.statusUpdates.nonEmpty) &&
           assertTrue(repo.statusUpdates.head._3 == "Occupied") &&
           assertTrue(prod.published.exists(_._1 == io.itbeans.ev.kafka.Topics.smartChargingTriggers))
+      },
+      test("StatusNotification skips smart-charging trigger when station has no site area") {
+        val repo = new InMemoryProcessorRepository
+        val prod = new InMemoryKafkaProducer
+        val proc = makeProcessor(repo, prod)
+        val json = """{"action":"StatusNotification","payload":{"connectorId":1,"connectorStatus":"Occupied"}}"""
+        for
+          _ <- proc.processRecord(stationA.value, json, s"ocpp.events.${t1.value}")
+        yield assertTrue(repo.statusUpdates.nonEmpty) &&
+          assertTrue(!prod.published.exists(_._1 == io.itbeans.ev.kafka.Topics.smartChargingTriggers))
       },
       test("StartTransaction creates transaction document and publishes lifecycle event") {
         val repo = new InMemoryProcessorRepository

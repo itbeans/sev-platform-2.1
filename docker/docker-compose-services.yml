@@ -22,9 +22,14 @@ networks:
     external: true
 
 # ── Common env fragments ───────────────────────────────────────────────────────
+# Both env-var spellings are provided: ocpp-processor and rest-api read
+# MONGODB_URI/MONGODB_DBNAME, the other services read MONGO_URI/MONGO_DB_NAME.
+# All services must point at the same database ("evserver").
 x-mongo: &mongo-env
   MONGODB_URI: mongodb://mongo:27017
-  MONGODB_DBNAME: evse
+  MONGODB_DBNAME: evserver
+  MONGO_URI: mongodb://mongo:27017
+  MONGO_DB_NAME: evserver
 
 x-kafka: &kafka-env
   KAFKA_BOOTSTRAP_SERVERS: kafka:29092
@@ -237,6 +242,7 @@ services:
     networks:
       - ev-local
     ports:
+      - "8093:8080"    # REST (/api/cars, /api/carcatalogs — routed via Kong)
       - "50054:9090"   # gRPC (GetUserDefaultCar)
     environment:
       <<: [*mongo-env, *kafka-env]
@@ -274,3 +280,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
+
+  # ── mailpit (local SMTP sink for ev-notification) ────────────────────────────
+  mailpit:
+    image: axllent/mailpit:v1.21
+    container_name: ev-mailpit
+    restart: unless-stopped
+    networks:
+      - ev-local
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI

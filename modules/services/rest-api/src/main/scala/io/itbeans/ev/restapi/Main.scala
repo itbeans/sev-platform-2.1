@@ -1,7 +1,6 @@
 package io.itbeans.ev.restapi
 
 import io.itbeans.ev.auth.CasbinAuthorizationService
-import io.itbeans.ev.otel.{EvTracing, OtelConfig, OtelLayer}
 import org.mongodb.scala.MongoClient
 import zio._
 import zio.config.typesafe.TypesafeConfigProvider
@@ -56,9 +55,6 @@ object Main extends ZIOAppDefault:
       Runtime.setConfigProvider(TypesafeConfigProvider.fromResourcePath()),
       // Config
       ZLayer.fromZIO(ZIO.config[RestApiConfig]),
-      ZLayer.fromZIO(ZIO.config[OtelConfig]),
-      OtelLayer.live,
-      EvTracing.live,
       // MongoDB
       mongoDatabaseLayer,
       // Repository
@@ -66,6 +62,7 @@ object Main extends ZIOAppDefault:
       // Authorization (in-process RBAC/ABAC)
       CasbinAuthorizationService.live,
       // gRPC clients
+      AuthGrpcClient.live,
       OcppGatewayGrpcClient.live,
       BillingGrpcClient.live,
       // REST server

@@ -124,6 +124,7 @@ object AssetHttpServer:
             assetName = asset.name,
             siteAreaId = asset.siteAreaId,
             assetType = asset.assetType,
+            powerWatts = body.instantWatts,
             measurement = measurement
           )
           _ <- kafka.publish(Topics.assetConsumptions, asset.id, event)

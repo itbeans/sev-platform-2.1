@@ -9,7 +9,7 @@ spec:
   description: EV Charging Platform — Scala microservices
 
   sourceRepos:
-    - "https://github.com/itbeans/ev-server"
+    - "https://github.com/itbeans/sev-platform-2.1"
 
   destinations:
     - namespace: ev-platform

@@ -1,7 +1,7 @@
 package io.itbeans.ev.mongo
 
 import io.itbeans.ev.domain._
-import io.itbeans.ev.mongo.DomainBsonCodecs.given
+import io.itbeans.ev.mongo.DomainBsonCodecs.{*, given}
 import org.bson.Document
 import org.mongodb.scala.MongoDatabase
 import org.mongodb.scala.model.{Filters, Sorts}
@@ -38,6 +38,7 @@ final class MongoNotificationRepository(db: MongoDatabase) extends NotificationR
     col(n.tenantId).insertOne(encodeDoc(n))
 
 object MongoNotificationRepository:
+
   val live: ZLayer[MongoDatabase, Nothing, NotificationRepository] =
     ZLayer.fromFunction(MongoNotificationRepository(_))
 
@@ -66,6 +67,7 @@ final class MongoNotificationPreferencesRepository(db: MongoDatabase) extends No
     )
 
 object MongoNotificationPreferencesRepository:
+
   val live: ZLayer[MongoDatabase, Nothing, NotificationPreferencesRepository] =
     ZLayer.fromFunction(MongoNotificationPreferencesRepository(_))
 
@@ -102,6 +104,7 @@ final class MongoRegistrationTokenRepository(db: MongoDatabase) extends Registra
     col(tenantId).deleteOne(Filters.eq("_id", id.value))
 
 object MongoRegistrationTokenRepository:
+
   val live: ZLayer[MongoDatabase, Nothing, RegistrationTokenRepository] =
     ZLayer.fromFunction(MongoRegistrationTokenRepository(_))
 
@@ -130,5 +133,6 @@ final class MongoTenantSettingsRepository(db: MongoDatabase) extends TenantSetti
     )
 
 object MongoTenantSettingsRepository:
+
   val live: ZLayer[MongoDatabase, Nothing, TenantSettingsRepository] =
     ZLayer.fromFunction(MongoTenantSettingsRepository(_))

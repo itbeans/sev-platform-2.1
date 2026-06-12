@@ -69,7 +69,8 @@ object Main extends ZIOAppDefault:
   private val program: ZIO[
     BillingService & BillingKafkaConsumer & BillingPeriodicTask &
       StripeClient & InvoiceRepository & BillingAccountRepository &
-      BillingUserRepository & BillingGrpcHandler & BillingConfig & Server & EvTracing,
+      BillingTransferRepository & BillingUserRepository & BillingGrpcHandler &
+      BillingConfig & Server & EvTracing,
     Throwable,
     Unit
   ] =

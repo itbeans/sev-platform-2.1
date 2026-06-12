@@ -92,8 +92,8 @@ case class Asset(
 )
 
 object Asset:
-  given Schema[AssetType]               = DeriveSchema.gen
-  given Schema[AssetConnectorType]      = DeriveSchema.gen
-  given Schema[AssetMeasurement]        = DeriveSchema.gen
+  given Schema[AssetType] = DeriveSchema.gen
+  given Schema[AssetConnectorType] = DeriveSchema.gen
+  given Schema[AssetMeasurement] = DeriveSchema.gen
   given Schema[AssetCurrentConsumption] = DeriveSchema.gen
-  given Schema[Asset]                   = DeriveSchema.gen
+  given Schema[Asset] = DeriveSchema.gen

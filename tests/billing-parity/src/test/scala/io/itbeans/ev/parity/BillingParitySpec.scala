@@ -27,35 +27,38 @@ object BillingParitySpec extends ZIOSpecDefault:
   // ── Golden record models ──────────────────────────────────────────────────
 
   case class DimensionExpected(`type`: String, unitPrice: Double, quantity: Double, amountCents: Int)
+
   case class ExpectedResult(
-    totalAmountCents: Int,
-    consumptionKwh:   Double,
-    durationSecs:     Long,
-    dimensions:       List[DimensionExpected],
+      totalAmountCents: Int,
+      consumptionKwh: Double,
+      durationSecs: Long,
+      dimensions: List[DimensionExpected]
   )
+
   case class Tariff(
-    `type`:               String,
-    pricePerKwh:          Option[Double] = None,
-    flatFeeCents:         Option[Int]    = None,
-    pricePerMinute:       Option[Double] = None,
-    freeKwh:              Option[Double] = None,
-    parkingFeePerMinute:  Option[Double] = None,
-    freeParkingMinutes:   Option[Int]    = None,
-    currency:             String         = "GBP",
+      `type`: String,
+      pricePerKwh: Option[Double] = None,
+      flatFeeCents: Option[Int] = None,
+      pricePerMinute: Option[Double] = None,
+      freeKwh: Option[Double] = None,
+      parkingFeePerMinute: Option[Double] = None,
+      freeParkingMinutes: Option[Int] = None,
+      currency: String = "GBP"
   )
+
   case class GoldenTx(
-    transactionId:    Long,
-    tenantId:         String,
-    chargingStationId:String,
-    userId:           String,
-    pricingId:        String,
-    startDate:        String,
-    endDate:          String,
-    meterStartWh:     Long,
-    meterStopWh:      Long,
-    chargingEndedAt:  Option[String] = None,
-    tariff:           Tariff,
-    expectedResult:   ExpectedResult,
+      transactionId: Long,
+      tenantId: String,
+      chargingStationId: String,
+      userId: String,
+      pricingId: String,
+      startDate: String,
+      endDate: String,
+      meterStartWh: Long,
+      meterStopWh: Long,
+      chargingEndedAt: Option[String] = None,
+      tariff: Tariff,
+      expectedResult: ExpectedResult
   )
 
   // ── Inline Scala pricing engine (mirrors TypeScript PricingFacade) ─────────
@@ -63,67 +66,68 @@ object BillingParitySpec extends ZIOSpecDefault:
   // so it can be validated without a running gRPC service.
 
   case class ComputedDimension(`type`: String, unitPrice: Double, quantity: Double, amountCents: Int)
+
   case class ComputedResult(
-    totalAmountCents: Int,
-    consumptionKwh:   Double,
-    durationSecs:     Long,
-    dimensions:       List[ComputedDimension],
+      totalAmountCents: Int,
+      consumptionKwh: Double,
+      durationSecs: Long,
+      dimensions: List[ComputedDimension]
   )
 
   def compute(tx: GoldenTx): ComputedResult =
     import java.time.Instant
-    val start       = Instant.parse(tx.startDate)
-    val end         = Instant.parse(tx.endDate)
-    val durationSec = end.getEpochSecond - start.getEpochSecond
+    val start          = Instant.parse(tx.startDate)
+    val end            = Instant.parse(tx.endDate)
+    val durationSec    = end.getEpochSecond - start.getEpochSecond
     val consumptionKwh = (tx.meterStopWh - tx.meterStartWh).toDouble / 1000.0
 
     tx.tariff.`type` match
       case "ENERGY" =>
         val ppu   = tx.tariff.pricePerKwh.getOrElse(0.0)
         val cents = Math.round(consumptionKwh * ppu * 100).toInt
-        val dims  = if cents > 0 then
+        val dims = if cents > 0 then
           List(ComputedDimension("ENERGY", ppu, consumptionKwh, cents))
         else Nil
         ComputedResult(cents, consumptionKwh, durationSec, dims)
 
       case "FLAT_FEE_PLUS_ENERGY" =>
-        val flatCents = tx.tariff.flatFeeCents.getOrElse(0)
-        val ppu       = tx.tariff.pricePerKwh.getOrElse(0.0)
+        val flatCents   = tx.tariff.flatFeeCents.getOrElse(0)
+        val ppu         = tx.tariff.pricePerKwh.getOrElse(0.0)
         val energyCents = Math.round(consumptionKwh * ppu * 100).toInt
         val dims = List(
           ComputedDimension("FLAT_FEE", flatCents / 100.0, 1.0, flatCents),
-          ComputedDimension("ENERGY",   ppu,               consumptionKwh, energyCents),
+          ComputedDimension("ENERGY", ppu, consumptionKwh, energyCents)
         )
         ComputedResult(flatCents + energyCents, consumptionKwh, durationSec, dims)
 
       case "TIME_PLUS_ENERGY" =>
-        val ppm       = tx.tariff.pricePerMinute.getOrElse(0.0)
-        val ppu       = tx.tariff.pricePerKwh.getOrElse(0.0)
-        val freeKwh   = tx.tariff.freeKwh.getOrElse(0.0)
-        val minutes   = durationSec / 60.0
+        val ppm         = tx.tariff.pricePerMinute.getOrElse(0.0)
+        val ppu         = tx.tariff.pricePerKwh.getOrElse(0.0)
+        val freeKwh     = tx.tariff.freeKwh.getOrElse(0.0)
+        val minutes     = durationSec / 60.0
         val billableKwh = Math.max(0.0, consumptionKwh - freeKwh)
         val timeCents   = Math.round(minutes * ppm * 100).toInt
         val energyCents = Math.round(billableKwh * ppu * 100).toInt
         val dims = List(
           ComputedDimension("CHARGING_TIME", ppm, minutes, timeCents),
-          ComputedDimension("ENERGY",        ppu, billableKwh, energyCents),
+          ComputedDimension("ENERGY", ppu, billableKwh, energyCents)
         )
         ComputedResult(timeCents + energyCents, consumptionKwh, durationSec, dims)
 
       case "ENERGY_PLUS_PARKING" =>
-        val ppu          = tx.tariff.pricePerKwh.getOrElse(0.0)
-        val parkingPpm   = tx.tariff.parkingFeePerMinute.getOrElse(0.0)
-        val freeParking  = tx.tariff.freeParkingMinutes.getOrElse(0)
-        val energyCents  = Math.round(consumptionKwh * ppu * 100).toInt
+        val ppu         = tx.tariff.pricePerKwh.getOrElse(0.0)
+        val parkingPpm  = tx.tariff.parkingFeePerMinute.getOrElse(0.0)
+        val freeParking = tx.tariff.freeParkingMinutes.getOrElse(0)
+        val energyCents = Math.round(consumptionKwh * ppu * 100).toInt
         // Parking time = session duration minus charging duration (if chargingEndedAt provided)
-        val chargingEnd  = tx.chargingEndedAt.map(Instant.parse)
-        val sessionEnd   = Instant.parse(tx.endDate)
-        val parkingMinutes = chargingEnd.fold(0L)(ce => (sessionEnd.getEpochSecond - ce.getEpochSecond) / 60)
+        val chargingEnd         = tx.chargingEndedAt.map(Instant.parse)
+        val sessionEnd          = Instant.parse(tx.endDate)
+        val parkingMinutes      = chargingEnd.fold(0L)(ce => (sessionEnd.getEpochSecond - ce.getEpochSecond) / 60)
         val billableParkingMins = Math.max(0L, parkingMinutes - freeParking)
-        val parkingCents = Math.round(billableParkingMins * parkingPpm * 100).toInt
+        val parkingCents        = Math.round(billableParkingMins * parkingPpm * 100).toInt
         val dims = List(
-          ComputedDimension("ENERGY",       ppu,        consumptionKwh,          energyCents),
-          ComputedDimension("PARKING_TIME", parkingPpm, billableParkingMins.toDouble, parkingCents),
+          ComputedDimension("ENERGY", ppu, consumptionKwh, energyCents),
+          ComputedDimension("PARKING_TIME", parkingPpm, billableParkingMins.toDouble, parkingCents)
         ).filter(_.amountCents > 0)
         ComputedResult(energyCents + parkingCents, consumptionKwh, durationSec, dims)
 
@@ -177,17 +181,15 @@ object BillingParitySpec extends ZIOSpecDefault:
 
           assertTrue(failures.isEmpty) ?? failures.mkString("\n")
       },
-
       test("zero-consumption sessions result in no charge") {
         for golden <- loadGolden
         yield
           val zeroTxs = golden.filter(tx => tx.meterStartWh == tx.meterStopWh)
           assertTrue(
             zeroTxs.nonEmpty,
-            zeroTxs.forall(tx => compute(tx).totalAmountCents == 0),
+            zeroTxs.forall(tx => compute(tx).totalAmountCents == 0)
           )
       },
-
       test("multi-tenant: same pricing-id produces different amounts when tariffs differ") {
         for golden <- loadGolden
         yield
@@ -200,5 +202,5 @@ object BillingParitySpec extends ZIOSpecDefault:
           }
           // At least one pricing-id has multi-tenant entries in the golden set
           assertTrue(crossTenantDifferences.nonEmpty)
-      },
+      }
     )

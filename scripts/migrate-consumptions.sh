@@ -2,7 +2,8 @@
 # migrate-consumptions.sh
 #
 # Migrates ev-server MongoDB `consumptions` collections (one per tenant) into
-# the TimescaleDB `consumptions` hypertable.
+# the TimescaleDB `ev_consumptions` hypertable used by ev-analytics
+# (schema: modules/services/analytics/src/main/resources/db/migration/V1__analytics_schema.sql).
 #
 # Prerequisites:
 #   - mongosh  (≥ 2.0)
@@ -14,8 +15,9 @@
 #   PG_URI=postgresql://ev:secret@localhost:5432/ev_analytics \
 #   ./migrate-consumptions.sh [--tenant TENANT_ID] [--dry-run] [--from 2024-01-01]
 #
-# The script is idempotent: it upserts on (transaction_id, tenant_id) so it
-# can be re-run after failures without creating duplicates.
+# The script is idempotent: rows are staged via COPY and inserted with
+# ON CONFLICT DO NOTHING, so it can be re-run after failures without
+# creating duplicates.
 
 set -euo pipefail
 
@@ -36,59 +38,74 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# ── Schema setup ──────────────────────────────────────────────────────────────
-ensure_schema() {
-  psql "$PG_URI" <<'SQL'
-CREATE EXTENSION IF NOT EXISTS timescaledb;
+# ── COPY + upsert helper ──────────────────────────────────────────────────────
+# PostgreSQL COPY has no ON CONFLICT clause, so rows are staged in a temp
+# table and merged with INSERT ... SELECT ... ON CONFLICT.
+copy_upsert() {
+  local table="$1" cols="$2" conflict_clause="$3"
+  {
+    echo "CREATE TEMP TABLE _stage (LIKE ${table} INCLUDING DEFAULTS);"
+    echo "COPY _stage (${cols}) FROM STDIN WITH (FORMAT csv, NULL '');"
+    cat
+    echo "\\."
+    echo "INSERT INTO ${table} (${cols}) SELECT ${cols} FROM _stage ${conflict_clause};"
+  } | psql "$PG_URI" -q -v ON_ERROR_STOP=1
+}
 
-CREATE TABLE IF NOT EXISTS consumptions (
-  time                TIMESTAMPTZ NOT NULL,
-  tenant_id           TEXT        NOT NULL,
-  transaction_id      BIGINT      NOT NULL,
-  charging_station_id TEXT        NOT NULL,
-  connector_id        INT         NOT NULL DEFAULT 1,
-  user_id             TEXT,
+# ── Schema setup ──────────────────────────────────────────────────────────────
+# Matches V1__analytics_schema.sql — keep in sync.
+ensure_schema() {
+  psql "$PG_URI" -v ON_ERROR_STOP=1 <<'SQL'
+CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
+
+CREATE TABLE IF NOT EXISTS ev_consumptions (
+  tenant_id           TEXT          NOT NULL,
+  time                TIMESTAMPTZ   NOT NULL,
+  charging_station_id TEXT          NOT NULL,
+  connector_id        INT           NOT NULL,
+  site_area_id        TEXT,
   site_id             TEXT,
-  energy_wh           DOUBLE PRECISION NOT NULL DEFAULT 0,
-  duration_secs       INT         NOT NULL DEFAULT 0,
-  instantaneous_power_w DOUBLE PRECISION,
-  tariff_id           TEXT,
-  total_cost_cents    INT,
-  currency            CHAR(3),
-  stop_reason         TEXT,
-  PRIMARY KEY (time, tenant_id, transaction_id)
+  user_id             TEXT,
+  transaction_id      BIGINT,
+  instant_watts       DOUBLE PRECISION NOT NULL DEFAULT 0,
+  cumulated_kwh       DOUBLE PRECISION NOT NULL DEFAULT 0
 );
 
 SELECT create_hypertable(
-  'consumptions', 'time',
-  if_not_exists => TRUE,
-  chunk_time_interval => INTERVAL '7 days'
+  'ev_consumptions', 'time',
+  chunk_time_interval => INTERVAL '1 week',
+  if_not_exists       => TRUE
 );
 
--- Continuous aggregate: hourly rollup per station
-CREATE MATERIALIZED VIEW IF NOT EXISTS consumptions_hourly
+CREATE INDEX IF NOT EXISTS idx_ev_consumptions_tenant_station
+  ON ev_consumptions (tenant_id, charging_station_id, time DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ev_consumptions_tenant_tx
+  ON ev_consumptions (tenant_id, transaction_id, time DESC)
+  WHERE transaction_id IS NOT NULL;
+
+-- Continuous aggregate: hourly energy rollup per station
+CREATE MATERIALIZED VIEW IF NOT EXISTS ev_consumptions_hourly
 WITH (timescaledb.continuous) AS
 SELECT
-  time_bucket('1 hour', time) AS bucket,
+  time_bucket('1 hour', time)             AS bucket,
   tenant_id,
   charging_station_id,
-  COUNT(*)                    AS session_count,
-  SUM(energy_wh)              AS total_energy_wh,
-  AVG(duration_secs)          AS avg_duration_secs,
-  SUM(total_cost_cents)       AS total_cost_cents
-FROM consumptions
+  COUNT(*)                                AS reading_count,
+  MAX(cumulated_kwh) - MIN(cumulated_kwh) AS energy_kwh,
+  AVG(instant_watts)                      AS avg_watts
+FROM ev_consumptions
 GROUP BY bucket, tenant_id, charging_station_id
 WITH NO DATA;
 
 -- Retain raw data for 2 years; hourly rollup forever
-SELECT add_retention_policy('consumptions', INTERVAL '2 years', if_not_exists => TRUE);
+SELECT add_retention_policy('ev_consumptions', INTERVAL '2 years', if_not_exists => TRUE);
 SQL
 }
 
 # ── Discover tenant IDs from MongoDB ─────────────────────────────────────────
 get_tenants() {
   mongosh --quiet "$MONGO_URI" --eval '
-    const dbs = db.adminCommand({ listDatabases: 1 }).databases.map(d => d.name);
     // ev-server uses a single database; collections are named {tenantId}.consumptions
     const cols = db.getSiblingDB("ev").listCollectionNames()
       .filter(n => n.endsWith(".consumptions"))
@@ -113,11 +130,12 @@ migrate_tenant() {
       const col = db.getSiblingDB('ev').getCollection('${collection}');
       const docs = col.find(
         { endedAt: { \\\$gte: ISODate('${FROM_DATE}') } },
-        { _id: 0, transactionId: 1, chargingStationId: 1, connectorId: 1,
-          userId: 1, siteId: 1, startedAt: 1, endedAt: 1,
-          totalConsumptionWh: 1, totalDurationSecs: 1,
-          instantaneousPowerW: 1, pricingId: 1, totalCostCents: 1,
-          currency: 1, stopReason: 1 }
+        { _id: 0, transactionId: 1, connectorId: 1,
+          chargingStationID: 1, chargingStationId: 1,
+          siteAreaID: 1, siteAreaId: 1, siteID: 1, siteId: 1,
+          userID: 1, userId: 1, startedAt: 1, endedAt: 1,
+          instantWatts: 1, instantaneousPowerW: 1,
+          cumulatedConsumptionWh: 1, totalConsumptionWh: 1 }
       ).skip(${skip}).limit(${BATCH_SIZE}).toArray();
       print(JSON.stringify(docs));
     ")
@@ -132,37 +150,29 @@ migrate_tenant() {
     if $DRY_RUN; then
       echo "    [DRY-RUN] Would insert ${row_count} rows (skip=${skip})"
     else
-      # Build a VALUES block and COPY via psql
-      echo "$rows" | jq -r '
+      # Column order: tenant_id, time, charging_station_id, connector_id,
+      #               site_area_id, site_id, user_id, transaction_id,
+      #               instant_watts, cumulated_kwh
+      # Both monolith (chargingStationID) and Scala (chargingStationId) field
+      # spellings are accepted.
+      # jq @csv renders null as an unquoted empty field, which COPY reads as
+      # SQL NULL (quoted "" would be an empty string / invalid number).
+      echo "$rows" | jq -r --arg tenant "$tenant" '
         [
-          (.endedAt // "1970-01-01T00:00:00Z"),
-          "'"${tenant}"'",
-          (.transactionId // 0 | tostring),
-          (.chargingStationId // ""),
-          (.connectorId // 1 | tostring),
-          (.userId // ""),
-          (.siteId // ""),
-          (.totalConsumptionWh // 0 | tostring),
-          (.totalDurationSecs // 0 | tostring),
-          (.instantaneousPowerW // "" | tostring),
-          (.pricingId // ""),
-          (.totalCostCents // "" | tostring),
-          (.currency // ""),
-          (.stopReason // "")
+          $tenant,
+          (.endedAt // .startedAt // "1970-01-01T00:00:00Z"),
+          (.chargingStationID // .chargingStationId // ""),
+          (.connectorId // 1),
+          (.siteAreaID // .siteAreaId // null),
+          (.siteID // .siteId // null),
+          (.userID // .userId // null),
+          (.transactionId // null),
+          (.instantWatts // .instantaneousPowerW // 0),
+          ((.cumulatedConsumptionWh // .totalConsumptionWh // 0) / 1000)
         ] | @csv
-      ' | psql "$PG_URI" -c "
-        COPY consumptions (
-          time, tenant_id, transaction_id, charging_station_id, connector_id,
-          user_id, site_id, energy_wh, duration_secs, instantaneous_power_w,
-          tariff_id, total_cost_cents, currency, stop_reason
-        )
-        FROM STDIN WITH (FORMAT csv)
-        ON CONFLICT (time, tenant_id, transaction_id) DO UPDATE SET
-          energy_wh             = EXCLUDED.energy_wh,
-          duration_secs         = EXCLUDED.duration_secs,
-          instantaneous_power_w = EXCLUDED.instantaneous_power_w,
-          total_cost_cents      = EXCLUDED.total_cost_cents;
-      "
+      ' | copy_upsert "ev_consumptions" \
+            "tenant_id, time, charging_station_id, connector_id, site_area_id, site_id, user_id, transaction_id, instant_watts, cumulated_kwh" \
+            "ON CONFLICT DO NOTHING"
     fi
 
     count=$(( count + row_count ))
@@ -206,7 +216,7 @@ main() {
   echo ""
   echo "Migration complete. Refresh continuous aggregate:"
   if ! $DRY_RUN; then
-    psql "$PG_URI" -c "CALL refresh_continuous_aggregate('consumptions_hourly', NULL, NULL);"
+    psql "$PG_URI" -c "CALL refresh_continuous_aggregate('ev_consumptions_hourly', NULL, NULL);"
   fi
 }
 

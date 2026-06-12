@@ -90,9 +90,9 @@ case class CarCatalog(
 )
 
 object Car:
-  given Schema[CarType]          = DeriveSchema.gen
-  given Schema[ConverterType]    = DeriveSchema.gen
-  given Schema[CarConverter]     = DeriveSchema.gen
+  given Schema[CarType] = DeriveSchema.gen
+  given Schema[ConverterType] = DeriveSchema.gen
+  given Schema[CarConverter] = DeriveSchema.gen
   given Schema[CarConnectorData] = DeriveSchema.gen
-  given Schema[Car]              = DeriveSchema.gen
-  given Schema[CarCatalog]       = DeriveSchema.gen
+  given Schema[Car] = DeriveSchema.gen
+  given Schema[CarCatalog] = DeriveSchema.gen

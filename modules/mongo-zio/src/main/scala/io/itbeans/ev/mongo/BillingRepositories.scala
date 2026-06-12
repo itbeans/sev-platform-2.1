@@ -1,7 +1,7 @@
 package io.itbeans.ev.mongo
 
 import io.itbeans.ev.domain._
-import io.itbeans.ev.mongo.DomainBsonCodecs.given
+import io.itbeans.ev.mongo.DomainBsonCodecs.{*, given}
 import org.bson.Document
 import org.mongodb.scala.MongoDatabase
 import org.mongodb.scala.model.{Filters, ReplaceOptions}
@@ -47,6 +47,7 @@ final class MongoInvoiceRepository(db: MongoDatabase) extends InvoiceRepository:
     col(tenantId).deleteOne(Filters.eq("_id", id.value))
 
 object MongoInvoiceRepository:
+
   val live: ZLayer[MongoDatabase, Nothing, InvoiceRepository] =
     ZLayer.fromFunction(MongoInvoiceRepository(_))
 
@@ -82,6 +83,7 @@ final class MongoBillingAccountRepository(db: MongoDatabase) extends BillingAcco
     col(account.tenantId).replaceOne(Filters.eq("_id", account.id), encodeDoc(account))
 
 object MongoBillingAccountRepository:
+
   val live: ZLayer[MongoDatabase, Nothing, BillingAccountRepository] =
     ZLayer.fromFunction(MongoBillingAccountRepository(_))
 
@@ -114,6 +116,7 @@ final class MongoBillingTransferRepository(db: MongoDatabase) extends BillingTra
     col(transfer.tenantId).replaceOne(Filters.eq("_id", transfer.id), encodeDoc(transfer))
 
 object MongoBillingTransferRepository:
+
   val live: ZLayer[MongoDatabase, Nothing, BillingTransferRepository] =
     ZLayer.fromFunction(MongoBillingTransferRepository(_))
 
@@ -142,5 +145,6 @@ final class MongoBillingUserRepository(db: MongoDatabase) extends BillingUserRep
     )
 
 object MongoBillingUserRepository:
+
   val live: ZLayer[MongoDatabase, Nothing, BillingUserRepository] =
     ZLayer.fromFunction(MongoBillingUserRepository(_))

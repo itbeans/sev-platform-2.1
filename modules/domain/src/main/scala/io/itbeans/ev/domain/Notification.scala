@@ -9,6 +9,7 @@ object NotificationId:
   def apply(v: String): NotificationId             = v
   def unapply(id: NotificationId): Some[String]    = Some(id)
   extension (id: NotificationId) def value: String = id
+
   given Schema[NotificationId] =
     Schema.Primitive(StandardType.StringType, zio.Chunk.empty).transform(NotificationId(_), _.value)
 
@@ -18,32 +19,33 @@ object NotificationId:
 // ---------------------------------------------------------------------------
 
 enum NotificationType:
+
   case EndOfCharge,
-       OptimalChargeReached,
-       EndOfSession,
-       EndOfSignedSession,
-       TransactionStarted,
-       SessionNotStarted,
-       PreparingSessionNotStarted,
-       UserAccountStatusChanged,
-       NewRegisteredUser,
-       UserAccountInactivity,
-       VerificationEmail,
-       AdminAccountVerification,
-       AccountVerificationNotification,
-       ChargingStationStatusError,
-       ChargingStationRegistered,
-       UnknownUserBadged,
-       OfflineChargingStations,
-       BillingNewInvoice,
-       BillingSynchronizationFailed,
-       BillingAccountCreationLink,
-       BillingAccountActivation,
-       OcpiPatchStatusError,
-       OicpPatchStatusError,
-       ComputeChargingProfilesFailed,
-       CarsSynchronizationFailed,
-       EndUserError
+    OptimalChargeReached,
+    EndOfSession,
+    EndOfSignedSession,
+    TransactionStarted,
+    SessionNotStarted,
+    PreparingSessionNotStarted,
+    UserAccountStatusChanged,
+    NewRegisteredUser,
+    UserAccountInactivity,
+    VerificationEmail,
+    AdminAccountVerification,
+    AccountVerificationNotification,
+    ChargingStationStatusError,
+    ChargingStationRegistered,
+    UnknownUserBadged,
+    OfflineChargingStations,
+    BillingNewInvoice,
+    BillingSynchronizationFailed,
+    BillingAccountCreationLink,
+    BillingAccountActivation,
+    OcpiPatchStatusError,
+    OicpPatchStatusError,
+    ComputeChargingProfilesFailed,
+    CarsSynchronizationFailed,
+    EndUserError
 
 enum NotificationSeverity(val color: String):
   case Info    extends NotificationSeverity("#00376C")
@@ -61,11 +63,11 @@ case class Notification(
     channel: NotificationChannel,
     notificationType: NotificationType,
     severity: NotificationSeverity,
-    sourceId: String,           // transaction ID, station ID, etc.
+    sourceId: String, // transaction ID, station ID, etc.
     sourceDescr: String,
     chargeBoxId: Option[ChargingStationId],
     timestamp: Instant,
-    data: Map[String, String]   // template-variable payload
+    data: Map[String, String] // template-variable payload
 )
 
 // Request published to the notifications.outbound Kafka topic
@@ -91,13 +93,13 @@ case class NotificationRequest(
 case class NotificationPreferences(
     userId: UserId,
     tenantId: TenantId,
-    preferences: Map[String, Set[NotificationChannel]]   // notificationType.name → channels
+    preferences: Map[String, Set[NotificationChannel]] // notificationType.name → channels
 )
 
 object Notification:
-  given Schema[NotificationType]        = DeriveSchema.gen
-  given Schema[NotificationSeverity]    = DeriveSchema.gen
-  given Schema[NotificationChannel]     = DeriveSchema.gen
-  given Schema[Notification]            = DeriveSchema.gen
-  given Schema[NotificationRequest]     = DeriveSchema.gen
+  given Schema[NotificationType] = DeriveSchema.gen
+  given Schema[NotificationSeverity] = DeriveSchema.gen
+  given Schema[NotificationChannel] = DeriveSchema.gen
+  given Schema[Notification] = DeriveSchema.gen
+  given Schema[NotificationRequest] = DeriveSchema.gen
   given Schema[NotificationPreferences] = DeriveSchema.gen

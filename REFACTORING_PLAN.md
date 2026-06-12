@@ -1,8 +1,8 @@
 # ev-server Scala Microservices Refactoring — Living Progress Plan
 
-> **Last updated:** 2026-05-10  
+> **Last updated:** 2026-06-12  
 > **Branch:** `claude/codebase-review-summary-hgNgO`  
-> **Overall progress: 100% — all planned implementation complete**
+> **Overall progress: 100% — all planned implementation complete; post-review integration fixes applied**
 
 Legend: ✅ Done · 🔄 In Progress · ⬜ Not Started · 🔒 Blocked
 
@@ -399,6 +399,90 @@ MONGO_URI=mongodb://... PG_URI=postgresql://... \
 
 All scripts are idempotent (`ON CONFLICT DO UPDATE`/`DO NOTHING`) and support
 `--tenant TENANT_ID` for per-tenant validation before full runs.
+
+---
+
+## Post-Review Integration Fixes (2026-06-12)
+
+A full three-track audit (service implementations, infrastructure/deployment, cross-service integration) found runtime blockers, a security gap, and unimplemented billing endpoints. All fixed in this session.
+
+### Kafka contract mismatches (runtime blockers)
+
+| Topic | Bug | Fix |
+|---|---|---|
+| `transactions.lifecycle` | `transactionId` published as String; billing + roaming decoded as Long. Missing `connectorId`, `stopReason`, `userId`, `meterStart` | Publisher now emits numeric JSON for OCPP 1.6 IDs. Added all missing fields. Custom `Decoder[Long]` accepts number or numeric string on consumers. |
+| `smart-charging.triggers` | Publisher emitted `{tenantId, stationId, timestamp}`; consumer required `{tenantId, siteAreaId, event, chargingStationId, connectorId}` | Rewritten to look up station's `siteAreaId` from MongoDB; skips publish if station has no site area. |
+| `asset.consumptions` | Missing `powerWatts` flat field (flat copy of `measurement.instantWatts`) | Added to `AssetConsumptionEvent`; populated in `recordMeasurement`. |
+
+### PostgreSQL schema (runtime blockers)
+
+- `docker/init/postgres-init.sql` rewrote to canonical schema matching `V1__analytics_schema.sql` and `V1__billing_schema.sql` (correct table names, `time` column for TimescaleDB hypertables, billing tables included).
+- `scripts/migrate-consumptions.sh` and `scripts/migrate-logs.sh` rewritten to match canonical schema; added `copy_upsert()` helper (PostgreSQL COPY does not support ON CONFLICT).
+- `scripts/migrate-billing.sh` — replaced direct COPY blocks with `copy_upsert()` pattern throughout.
+- `V1__analytics_schema.sql` — added compression enablement before `add_compression_policy` (TimescaleDB requirement).
+
+### ArgoCD deployment (deployment blockers)
+
+- All 14 Application CRs fixed: `repoURL` → `https://github.com/itbeans/sev-platform-2.1`; removed `scala-services/` path prefix.
+- `argocd/project.yaml` `sourceRepos` fixed to match.
+
+### Docker Compose gaps
+
+- `car` service: added missing `8080` HTTP port (Kong routes `/api/cars/*` to it).
+- Added `mailpit` service to `docker-compose-services.yml` (notification service depends on SMTP).
+- Fixed env fragment to include both `MONGODB_URI/MONGODB_DBNAME` and `MONGO_URI/MONGO_DB_NAME` (different services use different spellings).
+
+### JWT authentication gap (security)
+
+- `rest-api/Main.scala`: wired `AuthGrpcClient.live` into the layer graph.
+- `rest-api/RestApiServer.scala`: added `bearerAuth: HandlerAspect` that validates Bearer JWT against ev-auth-service over gRPC (fail-closed on unreachable auth service). Health + Swagger docs excluded from auth; all `/api/*` routes protected.
+
+### Billing gRPC stubs (unimplemented endpoints)
+
+- `BillingGrpcTransport.scala`: implemented all 4 previously-stubbed gRPC RPCs:
+  - `onboardBillingAccount` — creates Stripe Express account + account link + `BillingAccount` record.
+  - `activateBillingAccount` — checks Stripe `charges_enabled`; marks Active or generates new onboarding link.
+  - `finalizeTransfer` — transitions transfer status Draft → Finalized.
+  - `sendTransfer` — delegates to `billing.dispatchFundsForAccount`.
+- `build.sbt`: added `grpcDeps` + `.dependsOn(proto)` to `billingService` (required for ScalaPB types in `BillingGrpcTransport`).
+- `StripeClient`: added `retrieveAccount(accountId)` to trait and `LiveStripeClient`.
+- `BillingServiceSpec`: added 4 integration tests covering the new gRPC endpoints (in-memory stubs, no Stripe network calls).
+
+### Build & Test Verification (2026-06-12, post-review)
+
+The post-review session also ran the first clean-environment `sbt compile` /
+`sbt test`, which surfaced that the project had never compiled outside a
+warm cache. All issues below are fixed; the suite now passes (289 tests,
+0 failures) and `scalafmtCheckAll` is clean. The only specs not runnable
+locally without Docker are TenantCollectionSpec and EvKafkaProducerSpec
+(testcontainers — they run in CI's service containers).
+
+**Phantom dependencies (build could never resolve):**
+- `io.opentelemetry.instrumentation:opentelemetry-zio-2.0:1.43.0-alpha` does
+  not exist on Maven Central — removed from every dependency list.
+- `pact4s 0.9.1` was never published (the zio-test module starts at 0.11.0)
+  and the pact specs were written against a fabricated
+  `io.github.jbwheatley.pact4s` API. Specs rewritten as plain contract
+  specs pinning the real Kafka/HTTP JSON shapes; pact4s removed.
+
+**Compile errors fixed (main):** Scala 3 `export` keyword import in
+OtelLayer; `DomainBsonCodecs.given` import missing plain helpers in 8
+mongo-zio repositories; `Tag` ambiguity (domain vs zio); zio-kafka
+`CommittableRecord.record.topic`; smartCharging/billingService missing
+grpcDeps + proto in build.sbt; missing `Metric`/proto imports; ZIO tuple
+destructure in for-comprehensions; unused-layer ZLayer errors in 7 service
+Mains; `UIO` vs failable promise in CrossPodCommandRelay; tapir endpoint
+list type annotations in AuthHttpServer; `.ignore` misuse in roaming.
+
+**RBAC policy reconciled (security-relevant):** `rbac_policy.csv` disagreed
+with the AuthorizationsDefinition.ts-derived matrix in 88 of 552 entries —
+including Admin having full Tenant CRUD and SiteAdmin/SiteOwner inheriting
+PaymentMethod access from Basic. Added eft/deny-override support to the
+Casbin model and reconciled the CSV (20 over-grants removed, 54 missing
+grants added, 14 deny overrides). RbacMatrixSpec passes 552/552.
+
+**Test data:** golden-transactions.json tx#1005 expectation was internally
+inconsistent (550c for 50 min x 0.1 GBP/min); corrected to 500c/1400c.
 
 ### TypeScript Monolith Decommission
 

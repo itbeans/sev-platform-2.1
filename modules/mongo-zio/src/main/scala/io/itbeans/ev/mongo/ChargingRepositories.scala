@@ -1,7 +1,7 @@
 package io.itbeans.ev.mongo
 
 import io.itbeans.ev.domain._
-import io.itbeans.ev.mongo.DomainBsonCodecs.given
+import io.itbeans.ev.mongo.DomainBsonCodecs.{*, given}
 import org.bson.Document
 import org.mongodb.scala.MongoDatabase
 import org.mongodb.scala.model.Filters
@@ -51,6 +51,7 @@ final class MongoChargingStationRepository(db: MongoDatabase) extends ChargingSt
     col(tenantId).deleteOne(Filters.eq("_id", id.value))
 
 object MongoChargingStationRepository:
+
   val live: ZLayer[MongoDatabase, Nothing, ChargingStationRepository] =
     ZLayer.fromFunction(MongoChargingStationRepository(_))
 
@@ -95,5 +96,6 @@ final class MongoChargingProfileRepository(db: MongoDatabase) extends ChargingPr
     col(tenantId).deleteOne(Filters.eq("_id", id.value))
 
 object MongoChargingProfileRepository:
+
   val live: ZLayer[MongoDatabase, Nothing, ChargingProfileRepository] =
     ZLayer.fromFunction(MongoChargingProfileRepository(_))

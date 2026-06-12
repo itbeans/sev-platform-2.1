@@ -48,6 +48,20 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# ── COPY + upsert helper ──────────────────────────────────────────────────────
+# PostgreSQL COPY has no ON CONFLICT clause, so rows are staged in a temp
+# table and merged with INSERT ... SELECT ... ON CONFLICT.
+copy_upsert() {
+  local table="$1" cols="$2" conflict_clause="$3"
+  {
+    echo "CREATE TEMP TABLE _stage (LIKE ${table} INCLUDING DEFAULTS);"
+    echo "COPY _stage (${cols}) FROM STDIN WITH (FORMAT csv, NULL '');"
+    cat
+    echo "\\."
+    echo "INSERT INTO ${table} (${cols}) SELECT ${cols} FROM _stage ${conflict_clause};"
+  } | psql "$PG_URI" -q -v ON_ERROR_STOP=1
+}
+
 # ── Schema guard ──────────────────────────────────────────────────────────────
 # Verify the target tables exist (created by Flyway on service startup).
 # The migration does not create tables itself — run the billing-service once
@@ -150,26 +164,18 @@ migrate_invoices() {
           (.createdOn    | tostring),
           (.lastChangedOn | tostring)
         ] | @csv
-      ' | psql "$PG_URI" -c "
-        COPY billing_invoices (
-          id, tenant_id, invoice_id, invoice_number, status,
-          amount_cents, amount_paid_cents, currency,
-          user_id, customer_id, live_mode, sessions_json,
-          download_url, pay_invoice_url, last_error,
-          created_on, last_changed_on
-        )
-        FROM STDIN WITH (FORMAT csv, NULL 'null')
-        ON CONFLICT (id) DO UPDATE SET
-          invoice_number    = EXCLUDED.invoice_number,
-          status            = EXCLUDED.status,
-          amount_cents      = EXCLUDED.amount_cents,
-          amount_paid_cents = EXCLUDED.amount_paid_cents,
-          sessions_json     = EXCLUDED.sessions_json,
-          download_url      = EXCLUDED.download_url,
-          pay_invoice_url   = EXCLUDED.pay_invoice_url,
-          last_error        = EXCLUDED.last_error,
-          last_changed_on   = EXCLUDED.last_changed_on;
-      "
+      ' | copy_upsert "billing_invoices" \
+            "id, tenant_id, invoice_id, invoice_number, status, amount_cents, amount_paid_cents, currency, user_id, customer_id, live_mode, sessions_json, download_url, pay_invoice_url, last_error, created_on, last_changed_on" \
+            "ON CONFLICT (id) DO UPDATE SET
+               invoice_number    = EXCLUDED.invoice_number,
+               status            = EXCLUDED.status,
+               amount_cents      = EXCLUDED.amount_cents,
+               amount_paid_cents = EXCLUDED.amount_paid_cents,
+               sessions_json     = EXCLUDED.sessions_json,
+               download_url      = EXCLUDED.download_url,
+               pay_invoice_url   = EXCLUDED.pay_invoice_url,
+               last_error        = EXCLUDED.last_error,
+               last_changed_on   = EXCLUDED.last_changed_on"
     fi
 
     count=$(( count + row_count ))
@@ -230,18 +236,13 @@ migrate_accounts() {
           (.createdOn | tostring),
           .createdBy
         ] | @csv
-      ' | psql "$PG_URI" -c "
-        COPY billing_accounts (
-          id, tenant_id, business_owner_user_id, company_name, status,
-          account_external_id, activation_link, created_on, created_by
-        )
-        FROM STDIN WITH (FORMAT csv, NULL 'null')
-        ON CONFLICT (id) DO UPDATE SET
-          company_name        = EXCLUDED.company_name,
-          status              = EXCLUDED.status,
-          account_external_id = EXCLUDED.account_external_id,
-          activation_link     = EXCLUDED.activation_link;
-      "
+      ' | copy_upsert "billing_accounts" \
+            "id, tenant_id, business_owner_user_id, company_name, status, account_external_id, activation_link, created_on, created_by" \
+            "ON CONFLICT (id) DO UPDATE SET
+               company_name        = EXCLUDED.company_name,
+               status              = EXCLUDED.status,
+               account_external_id = EXCLUDED.account_external_id,
+               activation_link     = EXCLUDED.activation_link"
     fi
 
     count=$(( count + row_count ))
@@ -310,23 +311,16 @@ migrate_transfers() {
           (.createdOn    | tostring),
           (.lastChangedOn | tostring)
         ] | @csv
-      ' | psql "$PG_URI" -c "
-        COPY billing_transfers (
-          id, tenant_id, account_id, account_external_id, status, currency,
-          session_counter, collected_funds_cents, collected_fees_cents,
-          transfer_amount_cents, transfer_external_id,
-          created_on, last_changed_on
-        )
-        FROM STDIN WITH (FORMAT csv, NULL 'null')
-        ON CONFLICT (id) DO UPDATE SET
-          status                = EXCLUDED.status,
-          session_counter       = EXCLUDED.session_counter,
-          collected_funds_cents = EXCLUDED.collected_funds_cents,
-          collected_fees_cents  = EXCLUDED.collected_fees_cents,
-          transfer_amount_cents = EXCLUDED.transfer_amount_cents,
-          transfer_external_id  = EXCLUDED.transfer_external_id,
-          last_changed_on       = EXCLUDED.last_changed_on;
-      "
+      ' | copy_upsert "billing_transfers" \
+            "id, tenant_id, account_id, account_external_id, status, currency, session_counter, collected_funds_cents, collected_fees_cents, transfer_amount_cents, transfer_external_id, created_on, last_changed_on" \
+            "ON CONFLICT (id) DO UPDATE SET
+               status                = EXCLUDED.status,
+               session_counter       = EXCLUDED.session_counter,
+               collected_funds_cents = EXCLUDED.collected_funds_cents,
+               collected_fees_cents  = EXCLUDED.collected_fees_cents,
+               transfer_amount_cents = EXCLUDED.transfer_amount_cents,
+               transfer_external_id  = EXCLUDED.transfer_external_id,
+               last_changed_on       = EXCLUDED.last_changed_on"
     fi
 
     count=$(( count + row_count ))
@@ -377,15 +371,11 @@ migrate_users() {
           (.defaultPaymentMethodId | if . == "" then null else . end),
           (.createdOn | tostring)
         ] | @csv
-      ' | psql "$PG_URI" -c "
-        COPY billing_users (
-          user_id, tenant_id, customer_id, default_payment_method_id, created_on
-        )
-        FROM STDIN WITH (FORMAT csv, NULL 'null')
-        ON CONFLICT (tenant_id, user_id) DO UPDATE SET
-          customer_id               = EXCLUDED.customer_id,
-          default_payment_method_id = EXCLUDED.default_payment_method_id;
-      "
+      ' | copy_upsert "billing_users" \
+            "user_id, tenant_id, customer_id, default_payment_method_id, created_on" \
+            "ON CONFLICT (tenant_id, user_id) DO UPDATE SET
+               customer_id               = EXCLUDED.customer_id,
+               default_payment_method_id = EXCLUDED.default_payment_method_id"
     fi
 
     count=$(( count + row_count ))

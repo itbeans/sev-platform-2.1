@@ -53,8 +53,8 @@ final class ParallelRunService(
 
       // 3. Resolve tenant + user from MongoDB.
       authTenant <- resolveTenant(tenant)
-      tenantId    = TenantId(authTenant.id)
-      authUser   <- userRepo.findByEmail(tenantId, email).flatMap {
+      tenantId = TenantId(authTenant.id)
+      authUser <- userRepo.findByEmail(tenantId, email).flatMap {
         case None    => ZIO.fail(new Exception(s"User '$email' not found in tenant '${authTenant.id}'"))
         case Some(u) => ZIO.succeed(u)
       }
@@ -116,9 +116,9 @@ final class ParallelRunService(
     diffJsonObjects(tsJson, scalaJson)
 
   private def diffJsonObjects(ts: Json, sc: Json): Map[String, FieldDiff] =
-    val tsObj    = ts.asObject.getOrElse(io.circe.JsonObject.empty)
-    val scObj    = sc.asObject.getOrElse(io.circe.JsonObject.empty)
-    val allKeys  = (tsObj.keys ++ scObj.keys).toSet -- ignoredFields
+    val tsObj   = ts.asObject.getOrElse(io.circe.JsonObject.empty)
+    val scObj   = sc.asObject.getOrElse(io.circe.JsonObject.empty)
+    val allKeys = (tsObj.keys ++ scObj.keys).toSet -- ignoredFields
     allKeys.flatMap { key =>
       val tsVal = tsObj(key).map(_.noSpaces).getOrElse("<absent>")
       val scVal = scObj(key).map(_.noSpaces).getOrElse("<absent>")

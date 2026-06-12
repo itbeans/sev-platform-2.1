@@ -1,7 +1,7 @@
 package io.itbeans.ev.mongo
 
 import io.itbeans.ev.domain._
-import io.itbeans.ev.mongo.DomainBsonCodecs.given
+import io.itbeans.ev.mongo.DomainBsonCodecs.{*, given}
 import org.bson.Document
 import org.mongodb.scala.MongoDatabase
 import org.mongodb.scala.model.Filters
@@ -47,6 +47,7 @@ final class MongoCarRepository(db: MongoDatabase) extends CarRepository:
     col(tenantId).deleteOne(Filters.eq("_id", id.value))
 
 object MongoCarRepository:
+
   val live: ZLayer[MongoDatabase, Nothing, CarRepository] =
     ZLayer.fromFunction(MongoCarRepository(_))
 
@@ -78,5 +79,6 @@ final class MongoCarCatalogRepository(db: MongoDatabase) extends CarCatalogRepos
     col.replaceOne(Filters.eq("_id", entry.id), doc, upsert = true)
 
 object MongoCarCatalogRepository:
+
   val live: ZLayer[MongoDatabase, Nothing, CarCatalogRepository] =
     ZLayer.fromFunction(MongoCarCatalogRepository(_))

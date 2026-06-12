@@ -89,7 +89,8 @@ object ChargingStationEndpoints:
     exportEp.zServerLogic { case tenantId =>
       repo.listStations(tenantId, limit = 10000, skip = 0, siteId = None, siteAreaId = None)
         .map { pr =>
-          val header = "ID,Vendor,Model,SerialNumber,FirmwareVersion,OcppVersion,SiteID,SiteAreaID,MaxPowerW,Inactive,Public,LastHeartbeat,CreatedOn\n"
+          val header =
+            "ID,Vendor,Model,SerialNumber,FirmwareVersion,OcppVersion,SiteID,SiteAreaID,MaxPowerW,Inactive,Public,LastHeartbeat,CreatedOn\n"
           val rows = pr.result.map { s =>
             List(
               s.id.value,

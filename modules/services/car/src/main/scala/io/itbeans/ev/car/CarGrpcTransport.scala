@@ -3,9 +3,9 @@ package io.itbeans.ev.car
 import _root_.io.grpc.netty.NettyServerBuilder
 import _root_.io.itbeans.ev.car.grpc.car_service.{
   CarServiceGrpc,
-  GetCurrentSoCRequest      => ProtoGetCurrentSoCRequest,
-  GetCurrentSoCResponse     => ProtoGetCurrentSoCResponse,
-  GetUserDefaultCarRequest  => ProtoGetUserDefaultCarRequest,
+  GetCurrentSoCRequest => ProtoGetCurrentSoCRequest,
+  GetCurrentSoCResponse => ProtoGetCurrentSoCResponse,
+  GetUserDefaultCarRequest => ProtoGetUserDefaultCarRequest,
   GetUserDefaultCarResponse => ProtoGetUserDefaultCarResponse
 }
 import io.itbeans.ev.domain.{TenantId, UserId}

@@ -25,8 +25,6 @@ object Dependencies {
     val otelAlpha      = "1.43.0-alpha"
     val testContainers = "0.41.4"
     val scalaCheck     = "1.18.1"
-    val pact           = "4.6.16"
-    val pact4s         = "0.9.1"
   }
 
   // ── ZIO core ──────────────────────────────────────────────────────────────
@@ -100,7 +98,6 @@ object Dependencies {
   val otelApi    = "io.opentelemetry" % "opentelemetry-api"                         % Versions.otel
   val otelSdk    = "io.opentelemetry" % "opentelemetry-sdk"                         % Versions.otel
   val otelExporter = "io.opentelemetry" % "opentelemetry-exporter-otlp"             % Versions.otel
-  val otelZio    = "io.opentelemetry.instrumentation" % "opentelemetry-zio-2.0"     % Versions.otelAlpha
 
   // ── Email (Jakarta Mail / SMTP) ───────────────────────────────────────────
   val jakartaMail = "org.eclipse.angus" % "angus-mail" % "2.0.3"
@@ -110,10 +107,6 @@ object Dependencies {
   val testContainersKafka  = "com.dimafeng" %% "testcontainers-scala-kafka"     % Versions.testContainers
   val testContainersPg     = "com.dimafeng" %% "testcontainers-scala-postgresql"% Versions.testContainers
   val scalaCheck           = "org.scalacheck" %% "scalacheck"                   % Versions.scalaCheck
-
-  // ── Pact contract testing ─────────────────────────────────────────────────
-  val pact4sZioTest = "io.github.jbwheatley" %% "pact4s-zio-test" % Versions.pact4s
-  val pact4sCirce   = "io.github.jbwheatley" %% "pact4s-circe"    % Versions.pact4s
 
   // ── Grouped dependency sets per module ────────────────────────────────────
 
@@ -144,7 +137,6 @@ object Dependencies {
   val otelZioDeps: Seq[ModuleID] = Seq(
     zio,
     otelApi, otelSdk, otelExporter,
-    otelZio, // ZIO fiber-local context storage (ServiceLoader SPI)
   )
 
   val serviceBaseDeps: Seq[ModuleID] = Seq(
@@ -155,7 +147,6 @@ object Dependencies {
     tapirCore, tapirZioHttp, tapirCirce, tapirOpenApi, tapirSwaggerUi,
     logback,
     otelApi, otelSdk, otelExporter,
-    otelZio, // ZIO fiber context storage — must be on classpath at startup
     zioTest % Test, zioTestSbt % Test, zioTestMagnolia % Test
   )
 

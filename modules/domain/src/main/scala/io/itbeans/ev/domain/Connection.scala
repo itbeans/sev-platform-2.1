@@ -9,6 +9,7 @@ object ConnectionId:
   def apply(v: String): ConnectionId             = v
   def unapply(id: ConnectionId): Some[String]    = Some(id)
   extension (id: ConnectionId) def value: String = id
+
   given Schema[ConnectionId] =
     Schema.Primitive(StandardType.StringType, zio.Chunk.empty).transform(ConnectionId(_), _.value)
 
@@ -55,5 +56,5 @@ case class Connection(
 
 object Connection:
   given Schema[ExternalConnectorType] = DeriveSchema.gen
-  given Schema[ConnectionStatus]      = DeriveSchema.gen
-  given Schema[Connection]            = DeriveSchema.gen
+  given Schema[ConnectionStatus] = DeriveSchema.gen
+  given Schema[Connection] = DeriveSchema.gen

@@ -89,11 +89,11 @@ final class OcpiCpoClient:
   def refreshCredentials(endpoint: OcpiEndpoint): Task[Unit] =
     val url = s"${endpoint.baseUrl}/ocpi/2.1.1/credentials"
     val body = io.circe.Json.obj(
-      "token"  -> io.circe.Json.fromString(endpoint.localToken),
-      "url"    -> io.circe.Json.fromString(s"${endpoint.baseUrl}/ocpi/cpo/2.1.1/versions"),
-      "roles"  -> io.circe.Json.arr(
+      "token" -> io.circe.Json.fromString(endpoint.localToken),
+      "url"   -> io.circe.Json.fromString(s"${endpoint.baseUrl}/ocpi/cpo/2.1.1/versions"),
+      "roles" -> io.circe.Json.arr(
         io.circe.Json.obj(
-          "role"         -> io.circe.Json.fromString("CPO"),
+          "role" -> io.circe.Json.fromString("CPO"),
           "business_details" -> io.circe.Json.obj(
             "name" -> io.circe.Json.fromString(endpoint.name)
           ),

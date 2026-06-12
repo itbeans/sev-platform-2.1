@@ -188,6 +188,9 @@ case class AssetConsumptionEvent(
     assetName: String,
     siteAreaId: String,
     assetType: AssetType,
+    // Flat copy of measurement.instantWatts — ev-smart-charging decodes only
+    // {tenantId, siteAreaId, powerWatts, assetType} (AssetConsumptionPayload).
+    powerWatts: Double,
     measurement: AssetMeasurement
 )
 

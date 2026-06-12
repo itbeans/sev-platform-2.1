@@ -11,9 +11,9 @@ spec:
   project: ev-platform
 
   source:
-    repoURL: https://github.com/itbeans/ev-server
+    repoURL: https://github.com/itbeans/sev-platform-2.1
     targetRevision: main
-    path: scala-services/helm/charts/ev-ocpp-gateway
+    path: helm/charts/ev-ocpp-gateway
     helm:
       valueFiles:
         - ../../../argocd/values/staging.yaml

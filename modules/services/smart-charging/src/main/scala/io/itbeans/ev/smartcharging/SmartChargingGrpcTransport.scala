@@ -2,14 +2,14 @@ package io.itbeans.ev.smartcharging
 
 import _root_.io.grpc.netty.NettyServerBuilder
 import _root_.io.itbeans.ev.smartcharging.grpc.smart_charging_service.{
-  SmartChargingServiceGrpc,
-  BuildChargingProfilesRequest  => ProtoBuildRequest,
+  BuildChargingProfilesRequest => ProtoBuildRequest,
   BuildChargingProfilesResponse => ProtoBuildResponse,
-  CheckConnectionRequest        => ProtoCheckConnectionRequest,
-  CheckConnectionResponse       => ProtoCheckConnectionResponse,
-  ChargingProfileResult         => ProtoChargingProfileResult,
-  TriggerSmartChargingRequest   => ProtoTriggerRequest,
-  TriggerSmartChargingResponse  => ProtoTriggerResponse
+  ChargingProfileResult => ProtoChargingProfileResult,
+  CheckConnectionRequest => ProtoCheckConnectionRequest,
+  CheckConnectionResponse => ProtoCheckConnectionResponse,
+  SmartChargingServiceGrpc,
+  TriggerSmartChargingRequest => ProtoTriggerRequest,
+  TriggerSmartChargingResponse => ProtoTriggerResponse
 }
 import io.itbeans.ev.otel.EvTracing
 import zio._

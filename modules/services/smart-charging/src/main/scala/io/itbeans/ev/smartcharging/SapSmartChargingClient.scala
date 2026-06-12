@@ -31,6 +31,7 @@ import java.util.Base64
 
 trait SapSmartChargingClient:
   def optimize(request: OptimizerRequest): Task[OptimizerResult]
+
   /** Returns true if the SAP optimizer endpoint is reachable (any HTTP response). */
   def checkConnection: Task[Boolean]
 
