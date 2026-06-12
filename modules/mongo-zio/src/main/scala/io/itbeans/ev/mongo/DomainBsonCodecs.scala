@@ -4,6 +4,8 @@ import io.circe._
 import io.circe.generic.semiauto._
 import io.circe.syntax._
 import io.itbeans.ev.domain._
+// Named import wins over the zio._ wildcard, which also exports a `Tag` type
+import io.itbeans.ev.domain.Tag
 import org.bson.Document
 import org.bson.json.{JsonMode, JsonWriterSettings}
 import zio._

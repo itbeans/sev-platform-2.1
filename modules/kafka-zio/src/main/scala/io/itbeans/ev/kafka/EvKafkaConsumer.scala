@@ -85,7 +85,9 @@ final class LiveEvKafkaConsumer(config: KafkaConfig) extends EvKafkaConsumer:
                   handler(key, event)
                     .catchAll(err => ZIO.logError(s"Handler failed for key=$key: ${err.getMessage}"))
                 case Left(err) =>
-                  ZIO.logWarning(s"Decode failed for key=$key topic=${record.topic}: ${err.getMessage}")
+                  ZIO.logWarning(
+                    s"Decode failed for key=$key topic=${record.record.topic}: ${err.getMessage}"
+                  )
             }
             .runDrain
         }

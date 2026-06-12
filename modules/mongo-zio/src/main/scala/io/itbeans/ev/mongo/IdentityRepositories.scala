@@ -1,7 +1,9 @@
 package io.itbeans.ev.mongo
 
 import io.itbeans.ev.domain._
-import io.itbeans.ev.mongo.DomainBsonCodecs.given
+// Named import wins over the zio._ wildcard, which also exports a `Tag` type
+import io.itbeans.ev.domain.Tag
+import io.itbeans.ev.mongo.DomainBsonCodecs.{*, given}
 import org.bson.Document
 import org.mongodb.scala.MongoDatabase
 import org.mongodb.scala.model.Filters
