@@ -2,7 +2,7 @@ package io.itbeans.ev.scheduler
 
 import io.itbeans.ev.kafka.KafkaConfig
 import io.itbeans.ev.mongo.{MongoClientLayer, MongoConfig, MongoDatabaseLayer}
-import io.itbeans.ev.otel.{EvTracing, OtelConfig, OtelLayer}
+
 import zio._
 import zio.config.magnolia._
 import zio.config.typesafe.TypesafeConfigProvider
@@ -50,9 +50,6 @@ object Main extends ZIOAppDefault:
       ZLayer.fromZIO(ZIO.config[MongoConfig]),
       ZLayer.fromZIO(ZIO.config[KafkaConfig]),
       ZLayer.fromZIO(ZIO.config[SchedulerConfig]),
-      ZLayer.fromZIO(ZIO.config[OtelConfig]),
-      OtelLayer.live,
-      EvTracing.live,
       // ── MongoDB ────────────────────────────────────────────────────────
       MongoClientLayer.live,
       MongoDatabaseLayer.live,

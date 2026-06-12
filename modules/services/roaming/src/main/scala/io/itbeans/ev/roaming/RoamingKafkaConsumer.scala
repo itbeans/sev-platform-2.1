@@ -80,7 +80,7 @@ final class RoamingKafkaConsumer(
         case None    => ZIO.fail(new Exception(s"Transaction ${payload.transactionId} not found"))
         case Some(t) => ZIO.succeed(t)
       // Enrich CDR with real station address, coordinates, and connector type
-      stationLoc <- stationRepo.findLocation(tenantId, tx.chargingStationId).ignore.map(_.toOption.flatten)
+      stationLoc <- stationRepo.findLocation(tenantId, tx.chargingStationId).either.map(_.toOption.flatten)
       ocpiPartners <- ocpiRepo.findRegistered(tenantId)
         .map(_.filter(_.role == OcpiRole.EMSP))
       oicpPartners <- oicpRepo.findRegistered(tenantId)

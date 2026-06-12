@@ -169,6 +169,8 @@ lazy val pricingService = serviceProject("pricing-service", "pricing-service")
 
 // SAP Smart Charging + OCPP 2.1 DER Control
 lazy val smartCharging = serviceProject("smart-charging", "smart-charging")
+  .settings(libraryDependencies ++= grpcDeps)
+  .dependsOn(proto)
 
 // Email + Firebase push notifications (Kafka consumer only)
 lazy val notification = serviceProject("notification", "notification")

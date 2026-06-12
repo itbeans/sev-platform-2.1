@@ -76,6 +76,14 @@ final class CrossPodCommandRelay(
               ))
           case Some(resp) => ZIO.succeed(resp)
         }
+        .catchAll(err =>
+          pendingRelays.update(_ - correlationId) *>
+            ZIO.succeed(SendCommandResponse(
+              delivered = false,
+              errorCode = "RelayError",
+              errorMessage = err.getMessage
+            ))
+        )
     yield result
 
   /** Consumes ocpp.commands.* — executes commands for locally-connected stations. */

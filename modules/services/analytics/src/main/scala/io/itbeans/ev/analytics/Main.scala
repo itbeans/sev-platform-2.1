@@ -1,7 +1,7 @@
 package io.itbeans.ev.analytics
 
 import io.itbeans.ev.kafka.KafkaConfig
-import io.itbeans.ev.otel.{EvTracing, OtelConfig, OtelLayer}
+
 import zio._
 import zio.config.typesafe.TypesafeConfigProvider
 import zio.http._
@@ -45,9 +45,6 @@ object Main extends ZIOAppDefault:
       // ── Config layers ──────────────────────────────────────────────────
       ZLayer.fromZIO(ZIO.config[KafkaConfig]),
       ZLayer.fromZIO(ZIO.config[AnalyticsConfig]),
-      ZLayer.fromZIO(ZIO.config[OtelConfig]),
-      OtelLayer.live,
-      EvTracing.live,
       // ── Repository layers (TimescaleDB/Doobie) ─────────────────────────
       AnalyticsRepository.consumptionRepoLive,
       AnalyticsRepository.logRepoLive,

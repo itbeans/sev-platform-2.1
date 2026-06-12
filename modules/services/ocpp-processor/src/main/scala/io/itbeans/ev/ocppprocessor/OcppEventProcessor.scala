@@ -5,10 +5,12 @@ import io.circe.parser._
 import io.circe.syntax._
 import io.itbeans.ev.domain._
 import io.itbeans.ev.kafka.{EvKafkaProducer, KafkaConfig, Topics}
+import io.itbeans.ev.pricing.grpc.pricing_service.FinalisePriceResponse
 import org.bson.Document
 import zio._
 import zio.kafka.consumer._
 import zio.kafka.serde.Serde
+import zio.metrics.Metric
 
 import java.time.Instant
 import scala.jdk.CollectionConverters._
